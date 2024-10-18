@@ -53,6 +53,8 @@
 #include "nrf_delay.h"
 #include "boards.h"
 
+static const uint8_t device_id[] = {6, 5, 8, 2};
+
 /**
  * @brief Function for application main entry.
  */
