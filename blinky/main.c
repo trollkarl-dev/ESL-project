@@ -65,13 +65,17 @@ int main(void)
     /* Configure board. */
     bsp_board_init(BSP_INIT_LEDS);
 
-    /* LEDs amount check */
+    /* LEDs amount and ID length check */
     if (sizeof(device_id)/sizeof(device_id[0]) != LEDS_NUMBER)
     {
         while (true)
         {
-            bsp_board_led_invert(0);
-            nrf_delay_ms(500);
+            for (i = 0; i < LEDS_NUMBER; i++)
+            {
+                bsp_board_led_invert(i);
+            }
+
+            nrf_delay_ms(100);
         }
     }
 
