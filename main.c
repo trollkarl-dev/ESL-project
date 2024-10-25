@@ -51,7 +51,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "nrf_delay.h"
-#include "boards.h"
+
+#include "lib/my_led.h"
 
 enum {
     blink_period_ms = 500
@@ -67,16 +68,20 @@ int main(void)
     int i, j;
 
     /* Configure board. */
-    bsp_board_init(BSP_INIT_LEDS);
+    for (i = my_led_first; i <= my_led_last; i++)
+    {
+        my_led_init(i);
+        my_led_off(i);
+    }
 
     /* Toggle LEDs. */
     while (true)
     {
-        for (i = 0; i < LEDS_NUMBER; i++)
+        for (i = my_led_first; i <= my_led_last; i++)
         {
             for (j = 0; j < 2*device_id[i]; j++)
             {
-                bsp_board_led_invert(i);
+                my_led_invert(i);
                 nrf_delay_ms(blink_period_ms);
             }
         }
