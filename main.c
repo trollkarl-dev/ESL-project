@@ -53,6 +53,10 @@
 #include "nrf_delay.h"
 #include "boards.h"
 
+enum {
+    blink_period_ms = 500
+};
+
 static const uint8_t device_id[] = {6, 5, 8, 2};
 
 /**
@@ -65,20 +69,6 @@ int main(void)
     /* Configure board. */
     bsp_board_init(BSP_INIT_LEDS);
 
-    /* LEDs amount and ID length check */
-    if (sizeof(device_id)/sizeof(device_id[0]) != LEDS_NUMBER)
-    {
-        while (true)
-        {
-            for (i = 0; i < LEDS_NUMBER; i++)
-            {
-                bsp_board_led_invert(i);
-            }
-
-            nrf_delay_ms(100);
-        }
-    }
-
     /* Toggle LEDs. */
     while (true)
     {
@@ -87,10 +77,8 @@ int main(void)
             for (j = 0; j < 2*device_id[i]; j++)
             {
                 bsp_board_led_invert(i);
-                nrf_delay_ms(250);
+                nrf_delay_ms(blink_period_ms);
             }
-
-            nrf_delay_ms(500);
         }
     }
 }
