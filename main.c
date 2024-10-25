@@ -58,6 +58,10 @@ enum {
     blink_period_ms = 500
 };
 
+enum {
+    button_idx = NRF_GPIO_PIN_MAP(1, 6)
+};
+
 static const uint8_t device_id[] = {6, 5, 8, 2};
 
 /**
@@ -74,16 +78,31 @@ int main(void)
         my_led_off(i);
     }
 
+    nrf_gpio_cfg_input(button_idx, NRF_GPIO_PIN_PULLUP);
+
+    i = my_led_first;
+    j = 1;
+
     /* Toggle LEDs. */
     while (true)
     {
-        for (i = my_led_first; i <= my_led_last; i++)
+        if (0 != nrf_gpio_pin_read(button_idx))
         {
-            for (j = 0; j < 2*device_id[i]; j++)
-            {
-                my_led_invert(i);
-                nrf_delay_ms(blink_period_ms);
-            }
+            continue;
+        }
+
+        my_led_invert(i);
+        nrf_delay_ms(blink_period_ms);
+
+        if (j >= 2*device_id[i])
+        {
+            j = 1;
+            i = (i >= my_led_last) ? my_led_first
+                                   : i+1;
+        }
+        else
+        {
+            j++;
         }
     }
 }
