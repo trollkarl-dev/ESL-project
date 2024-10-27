@@ -21,13 +21,13 @@ void my_led_init(int idx)
 void my_led_on(int idx)
 {
     if (my_led_check_idx(idx))
-        nrf_gpio_pin_write(my_led_mappings[idx], 0);
+        nrf_gpio_pin_write(my_led_mappings[idx], my_led_active_level);
 }
 
 void my_led_off(int idx)
 {
     if (my_led_check_idx(idx))
-        nrf_gpio_pin_write(my_led_mappings[idx], 1);
+        nrf_gpio_pin_write(my_led_mappings[idx], !my_led_active_level);
 }
 
 void my_led_invert(int idx)
