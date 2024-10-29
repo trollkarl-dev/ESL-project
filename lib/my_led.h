@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-#include "nrf_gpio.h"
-
 enum {
     my_led_first = 0,
     my_led_last = 3,

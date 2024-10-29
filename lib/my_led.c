@@ -1,4 +1,5 @@
 #include "my_led.h"
+#include "nrf_gpio.h"
 
 static const int my_led_mappings[] = {
     NRF_GPIO_PIN_MAP(0,  6),
