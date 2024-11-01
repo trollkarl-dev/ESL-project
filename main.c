@@ -1,20 +1,38 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "nrf_delay.h"
+#include "nrf_drv_clock.h"
+
+#include "app_timer.h"
 
 #include "lib/my_board.h"
+#include "lib/button.h"
 
-enum { blink_period_ms = 500 };
+/* static const uint8_t device_id[] = {6, 5, 8, 2}; */
 
-static const uint8_t device_id[] = {6, 5, 8, 2};
+APP_TIMER_DEF(button_timer);
+
+static volatile struct button main_button;
+
+static bool main_button_is_pressed(void)
+{
+    return my_btn_is_pressed(0);
+}
+
+static void main_button_callback(uint8_t clicks)
+{
+    my_led_invert(--clicks);
+}
+
+static void button_timer_handler(void *ctx)
+{
+    button_check((struct button *) &main_button);
+}
 
 int main(void)
 {
     int led_idx;
-    int blinky_counter;
 
-    /* Configure board. */
     for (led_idx = my_led_first; led_idx <= my_led_last; led_idx++)
     {
         my_led_init(led_idx);
@@ -23,29 +41,19 @@ int main(void)
 
     my_btn_init(0);
 
-    led_idx = my_led_first;
-    blinky_counter = 1;
+    main_button.is_pressed = main_button_is_pressed;
+    main_button.callback = main_button_callback;
 
-    /* Toggle LEDs. */
+    button_init((struct button *) &main_button);
+
+    nrf_drv_clock_init();
+    nrf_drv_clock_lfclk_request(NULL);
+
+    app_timer_init();
+    app_timer_create(&button_timer, APP_TIMER_MODE_REPEATED, button_timer_handler);
+    app_timer_start(button_timer, APP_TIMER_TICKS(1), NULL);
+
     while (true)
     {
-        if (!my_btn_is_pressed(0))
-        {
-            continue;
-        }
-
-        my_led_invert(led_idx);
-        nrf_delay_ms(blink_period_ms);
-
-        if (blinky_counter >= 2*device_id[led_idx])
-        {
-            blinky_counter = 1;
-            led_idx = (led_idx >= my_led_last) ? my_led_first
-                                               : led_idx+1;
-        }
-        else
-        {
-            blinky_counter++;
-        }
     }
 }
