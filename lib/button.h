@@ -13,14 +13,17 @@ enum {
     b_shift_reg_down = 0x00
 };
 
+enum { b_prev_timer_top = 200 };
+
 struct button {
     uint8_t shift_reg;
+    uint8_t click_counter;
+    uint16_t prev_timer;
+
     bool pressed_flag;
 
     bool (*is_pressed)(void);
-
-    void (*pressed_callback)(void);
-    void (*released_callback)(void);
+    void (*callback)(uint8_t);
 };
 
 void button_init(struct button *);
