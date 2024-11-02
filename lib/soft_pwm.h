@@ -9,25 +9,42 @@ extern "C" {
 
 #include "nrfx_systick.h"
 
-enum { soft_pwm_period_us = 1000 } /* f = 1 kHz */;
+enum { soft_pwm_max_pct = 100 };
+
+enum soft_pwm_init_result {
+    soft_pwm_init_success = 0,
+    soft_pwm_init_fail
+};
 
 struct soft_pwm_channel {
-    uint16_t id;
-    uint8_t value;
+    uint8_t id;
+    uint8_t duty_cycle_pct;
+    uint32_t duty_cycle_us;
 };
 
 struct soft_pwm {
     struct soft_pwm_channel *channels;
-    nrfx_systick_state_t state;
-    uint16_t amount;
+    uint16_t channels_amount;
+
+    nrfx_systick_state_t timestamp;
+    uint32_t period_us;
 
     void (*channel_on)(uint16_t id);
     void (*channel_off)(uint16_t id);
 };
 
-void soft_pwm_set_channel(struct soft_pwm *pwm, uint16_t ch, uint8_t value);
-uint8_t soft_pwm_get_channel(struct soft_pwm *pwm, uint16_t ch);
-void soft_pwm_routine(struct soft_pwm *pwm); /* must be called periodically */
+enum soft_pwm_init_result
+soft_pwm_init(struct soft_pwm *pwm,
+              struct soft_pwm_channel *channels,
+              uint16_t channels_amount,
+              uint32_t period_us,
+              void (*channel_on)(uint16_t),
+              void (*channel_off)(uint16_t));
+
+void soft_pwm_set_duty_cycle_pct(struct soft_pwm *pwm, uint16_t ch, uint8_t duty_cycle_pct);
+uint8_t soft_pwm_get_duty_cycle_pct(struct soft_pwm *pwm, uint16_t ch);
+
+void soft_pwm_routine(struct soft_pwm *pwm); /* must be called in loop */
 
 #ifdef __cplusplus
 }

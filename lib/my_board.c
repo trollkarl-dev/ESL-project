@@ -58,3 +58,19 @@ void my_led_invert(int idx)
     if (my_led_check_idx(idx))
         nrf_gpio_pin_toggle(my_led_mappings[idx]);
 }
+
+void my_board_init(void)
+{
+    int i;
+
+    for (i = my_led_first; i <= my_led_last; i++)
+    {
+        my_led_init(i);
+        my_led_off(i);
+    }
+
+    for (i = my_btn_first; i <= my_btn_last; i++)
+    {
+        my_btn_init(i);
+    }
+}

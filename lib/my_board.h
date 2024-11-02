@@ -31,6 +31,8 @@ void my_led_invert(int idx);
 void my_btn_init(int idx);
 bool my_btn_is_pressed(int idx);
 
+void my_board_init(void);
+
 #ifdef __cplusplus
 }
 #endif
