@@ -15,6 +15,11 @@ enum {
 
 enum { b_prev_timer_top = 200 };
 
+enum button_init_result {
+    button_init_success = 0,
+    button_init_fail
+};
+
 struct button {
     uint8_t shift_reg;
     uint8_t click_counter;
@@ -26,7 +31,11 @@ struct button {
     void (*callback)(uint8_t);
 };
 
-void button_init(struct button *);
+enum button_init_result
+button_init(struct button *btn,
+            bool (*is_pressed)(void),
+            void (*callback)(uint8_t));
+
 void button_check(struct button *);
 
 #ifdef __cplusplus

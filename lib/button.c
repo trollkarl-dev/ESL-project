@@ -2,12 +2,27 @@
 
 #include "button.h"
 
-void button_init(struct button *b)
+enum button_init_result
+button_init(struct button *btn,
+            bool (*is_pressed)(void),
+            void (*callback)(uint8_t))
 {
-    b->shift_reg = 0;
-    b->pressed_flag = false;
-    b->prev_timer = 0;
-    b->click_counter = 0;
+    if (btn == NULL ||
+        is_pressed == NULL ||
+        callback == NULL)
+    {
+        return button_init_fail;
+    }
+
+    btn->shift_reg = 0;
+    btn->pressed_flag = false;
+    btn->prev_timer = 0;
+    btn->click_counter = 0;
+
+    btn->is_pressed = is_pressed;
+    btn->callback = callback;
+
+    return button_init_success;
 }
 
 static bool button_is_rising(struct button *b)
