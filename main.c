@@ -6,6 +6,15 @@
 #include "nrfx_systick.h"
 #include "app_timer.h"
 
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+
+#include "nrf_log_backend_usb.h"
+
+#include "app_usbd.h"
+#include "app_usbd_serial_num.h"
+
 #include "lib/my_board.h"
 #include "lib/soft_pwm.h"
 #include "lib/button.h"
@@ -18,6 +27,13 @@ enum { soft_pwm_period_us = 1000 }; /* 1 kHz */
 enum { duty_cycle_update_period_us = 5000 };
 
 enum { button_idx = 0 };
+
+static const char *led_color[] = {
+    "\e[33myellow\e[0m",
+    "\e[31mred\e[0m",
+    "\e[32mgreen\e[0m",
+    "\e[34mblue\e[0m"
+};
 
 static volatile bool do_blinky = false;
 static volatile struct button main_button;
@@ -48,6 +64,8 @@ static void main_button_callback(uint8_t clicks)
     if (clicks == 2)
     {
         do_blinky = !do_blinky;
+        NRF_LOG_INFO("Double click -> %s smooth blinking",
+                     do_blinky ? "Start" : "Freeze");
     }
 }
 
@@ -70,6 +88,8 @@ static struct blinky_data blinky = {my_led_first, 0};
 
 static void blinker(struct blinky_data *data)
 {
+    int old_led_idx = data->led_idx;
+
     if (data->duty_cycle >= soft_pwm_max_pct * 2 * device_id[data->led_idx])
     {
         data->duty_cycle = 0;
@@ -91,6 +111,21 @@ static void blinker(struct blinky_data *data)
     soft_pwm_set_duty_cycle_pct(&pwm,
                                 data->led_idx,
                                 duty_cycle_transform(data->duty_cycle));
+
+    if (data->led_idx != old_led_idx)
+    {
+        NRF_LOG_INFO("LED #%d (%s) is blinking",
+                     data->led_idx,
+                     led_color[data->led_idx]);
+    }
+}
+
+void logs_init()
+{
+    ret_code_t ret = NRF_LOG_INIT(NULL);
+    APP_ERROR_CHECK(ret);
+
+    NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
 int main(void)
@@ -138,9 +173,15 @@ int main(void)
     app_timer_create(&button_timer, APP_TIMER_MODE_REPEATED, button_timer_handler);
     app_timer_start(button_timer, APP_TIMER_TICKS(1), NULL);
 
+    logs_init();
+    NRF_LOG_INFO("Starting up the test project with USB logging");
+
     while (true)
     {
         soft_pwm_routine(&pwm);
+
+        LOG_BACKEND_USB_PROCESS();
+        NRF_LOG_PROCESS();
 
         if (!nrfx_systick_test(&blinky_timestamp, duty_cycle_update_period_us))
         {
