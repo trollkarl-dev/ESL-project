@@ -5,7 +5,9 @@
 void button_init(struct button *b)
 {
     b->shift_reg = 0;
-    b->pressed_flag = 0;
+    b->pressed_flag = false;
+    b->prev_timer = 0;
+    b->click_counter = 0;
 }
 
 static bool button_is_rising(struct button *b)
