@@ -21,8 +21,9 @@ static bool my_btn_check_idx(int idx)
 void my_btn_init(int idx)
 {
     if (my_btn_check_idx(idx))
-        nrf_gpio_cfg_input(my_btn_mappings[idx], my_btn_active_level == 0 ? NRF_GPIO_PIN_PULLUP
-                                                                          : NRF_GPIO_PIN_PULLDOWN);
+        nrf_gpio_cfg_input(my_btn_mappings[idx],
+                           my_btn_active_level == 0 ? NRF_GPIO_PIN_PULLUP
+                                                    : NRF_GPIO_PIN_PULLDOWN);
 }
 
 bool my_btn_is_pressed(int idx)

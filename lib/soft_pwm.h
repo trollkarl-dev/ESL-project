@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
-#include "nrfx_systick.h"
+#include "soft_pwm_time.h"
 
 enum { soft_pwm_max_pct = 100 };
 
@@ -19,6 +19,9 @@ enum soft_pwm_init_result {
 struct soft_pwm_channel {
     uint8_t id;
     uint8_t duty_cycle_pct;
+
+    /* for internal use only*/
+    bool is_set;
     uint32_t duty_cycle_us;
 };
 
@@ -26,7 +29,7 @@ struct soft_pwm {
     struct soft_pwm_channel *channels;
     uint16_t channels_amount;
 
-    nrfx_systick_state_t timestamp;
+    soft_pwm_timestamp_t timestamp;
     uint32_t period_us;
 
     void (*channel_on)(uint16_t id);
@@ -41,8 +44,12 @@ soft_pwm_init(struct soft_pwm *pwm,
               void (*channel_on)(uint16_t),
               void (*channel_off)(uint16_t));
 
-void soft_pwm_set_duty_cycle_pct(struct soft_pwm *pwm, uint16_t ch, uint8_t duty_cycle_pct);
-uint8_t soft_pwm_get_duty_cycle_pct(struct soft_pwm *pwm, uint16_t ch);
+void soft_pwm_set_duty_cycle_pct(struct soft_pwm *pwm,
+                                 uint16_t ch,
+                                 uint8_t duty_cycle_pct);
+
+uint8_t soft_pwm_get_duty_cycle_pct(struct soft_pwm const *pwm,
+                                    uint16_t ch);
 
 void soft_pwm_routine(struct soft_pwm *pwm); /* must be called in loop */
 

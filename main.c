@@ -26,23 +26,26 @@ enum { soft_pwm_period_us = 1000 }; /* 1 kHz */
 
 enum { duty_cycle_update_period_us = 5000 };
 
-enum { button_idx = 0 };
-
-static const char *led_color[] = {
-    "\e[33myellow\e[0m",
-    "\e[31mred\e[0m",
-    "\e[32mgreen\e[0m",
-    "\e[34mblue\e[0m"
-};
-
-static volatile bool do_blinky = false;
-static volatile struct button main_button;
 static const uint8_t device_id[] = {6, 5, 8, 2};
 
 static struct soft_pwm pwm;
-static struct soft_pwm_channel pwm_channels[soft_pwm_channels_amount] = {
+
+static struct soft_pwm_channel
+pwm_channels[soft_pwm_channels_amount] = {
     {0}, {1}, {2}, {3} /* ID - LED number on the board */
 };
+
+void soft_pwm_systick_get(soft_pwm_timestamp_t * timestamp)
+{
+    nrfx_systick_get(timestamp);
+
+}
+
+bool soft_pwm_systick_test(soft_pwm_timestamp_t const * timestamp,
+                           uint32_t us)
+{
+    return nrfx_systick_test(timestamp, us);
+}
 
 static void pwm_channel_on(uint16_t id)
 {
@@ -54,10 +57,16 @@ static void pwm_channel_off(uint16_t id)
     my_led_off(id);
 }
 
+static volatile struct button main_button;
+
+enum { board_button_idx = 0 };
+
 static bool main_button_is_pressed(void)
 {
-    return my_btn_is_pressed(button_idx);
+    return my_btn_is_pressed(board_button_idx);
 }
+
+static volatile bool do_blinky = false;
 
 static void main_button_callback(uint8_t clicks)
 {
@@ -66,6 +75,11 @@ static void main_button_callback(uint8_t clicks)
         do_blinky = !do_blinky;
         NRF_LOG_INFO("Double click -> %s smooth blinking",
                      do_blinky ? "Start" : "Freeze");
+    }
+    else
+    {
+        NRF_LOG_INFO("The reaction to this number "
+                     "of clicks (%d) is not defined.", clicks);
     }
 }
 
@@ -81,10 +95,18 @@ struct blinky_data {
 
 static int duty_cycle_transform(int duty_cycle)
 {
-    return soft_pwm_max_pct - abs((duty_cycle % (2*soft_pwm_max_pct))-soft_pwm_max_pct);
+    return soft_pwm_max_pct -
+           abs((duty_cycle % (2*soft_pwm_max_pct))-soft_pwm_max_pct);
 }
 
 static struct blinky_data blinky = {my_led_first, 0};
+
+static const char *led_color[] = {
+    "\e[33myellow\e[0m",
+    "\e[31mred\e[0m",
+    "\e[32mgreen\e[0m",
+    "\e[34mblue\e[0m"
+};
 
 static void blinker(struct blinky_data *data)
 {
@@ -170,7 +192,9 @@ int main(void)
     nrf_drv_clock_lfclk_request(NULL);
 
     app_timer_init();
-    app_timer_create(&button_timer, APP_TIMER_MODE_REPEATED, button_timer_handler);
+    app_timer_create(&button_timer,
+                     APP_TIMER_MODE_REPEATED,
+                     button_timer_handler);
     app_timer_start(button_timer, APP_TIMER_TICKS(1), NULL);
 
     logs_init();
@@ -183,7 +207,8 @@ int main(void)
         LOG_BACKEND_USB_PROCESS();
         NRF_LOG_PROCESS();
 
-        if (!nrfx_systick_test(&blinky_timestamp, duty_cycle_update_period_us))
+        if (!nrfx_systick_test(&blinky_timestamp,
+                               duty_cycle_update_period_us))
         {
             continue;
         }

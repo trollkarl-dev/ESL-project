@@ -25,17 +25,17 @@ button_init(struct button *btn,
     return button_init_success;
 }
 
-static bool button_is_rising(struct button *b)
+static bool button_is_rising(struct button const *b)
 {
     return !b->pressed_flag && b->shift_reg == b_shift_reg_top;
 }
 
-static bool button_is_falling(struct button *b)
+static bool button_is_falling(struct button const *b)
 {
     return b->pressed_flag && b->shift_reg == b_shift_reg_down;
 }
 
-static bool button_is_released(struct button *b)
+static bool button_is_released(struct button const *b)
 {
     return b->prev_timer == 0 && !b->pressed_flag && b->click_counter != 0;
 }
