@@ -13,8 +13,6 @@ enum {
     b_shift_reg_down = 0x00
 };
 
-enum { b_prev_timer_top = 200 };
-
 enum button_init_result {
     button_init_success = 0,
     button_init_fail
@@ -23,7 +21,9 @@ enum button_init_result {
 struct button {
     uint8_t shift_reg;
     uint8_t click_counter;
-    uint16_t prev_timer;
+
+    uint16_t prev_click_timer;
+    uint16_t double_click_pause;
 
     bool pressed_flag;
 
@@ -33,6 +33,7 @@ struct button {
 
 enum button_init_result
 button_init(struct button *btn,
+            uint16_t double_click_pause,
             bool (*is_pressed)(void),
             void (*callback)(uint8_t));
 

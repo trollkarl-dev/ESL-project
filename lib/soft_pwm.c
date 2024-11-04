@@ -43,7 +43,7 @@ void soft_pwm_set_duty_cycle_pct(struct soft_pwm *pwm,
     uint32_t duty_cycle_us;
 
     duty_cycle_pct %= 1 + soft_pwm_max_pct;
-    duty_cycle_us = (((pwm->period_us << 8) * duty_cycle_pct) / 100) >> 8;
+    duty_cycle_us = (((pwm->period_us << 8) / 100) * duty_cycle_pct) >> 8;
 
     pwm->channels[ch].duty_cycle_pct = duty_cycle_pct;
     pwm->channels[ch].duty_cycle_us = duty_cycle_us;
