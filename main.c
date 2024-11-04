@@ -24,18 +24,18 @@ APP_TIMER_DEF(button_timer);
 enum { pwm_channels_amount = 4 };
 enum { pwm_period_us = 1000 }; /* 1 kHz */
 
+enum { board_button_idx = 0 };
 enum { btn_double_click_pause = 200 };
 
 enum { duty_cycle_update_period_us = 5000 };
 
+static volatile bool do_blinky = true;
+
 static const uint8_t device_id[] = {6, 5, 8, 2};
 
 static struct soft_pwm pwm;
-
-static struct soft_pwm_channel
-pwm_channels[pwm_channels_amount] = {
-    {0}, {1}, {2}, {3} /* ID - LED number on the board */
-};
+static struct soft_pwm_channel pwm_channels[pwm_channels_amount];
+static uint8_t pwm_channels_id[] = {0, 1, 2, 3}; /* LED number on the board */
 
 void soft_pwm_systick_get(soft_pwm_timestamp_t * timestamp)
 {
@@ -61,14 +61,11 @@ static void pwm_channel_off(uint16_t id)
 
 static volatile struct button main_button;
 
-enum { board_button_idx = 0 };
 
 static bool main_button_is_pressed(void)
 {
     return my_btn_is_pressed(board_button_idx);
 }
-
-static volatile bool do_blinky = true;
 
 static void main_button_callback(uint8_t clicks)
 {
@@ -93,15 +90,16 @@ static void button_timer_handler(void *ctx)
 struct blinky_data {
     int led_idx;
     int counter;
+    nrfx_systick_state_t timestamp;
 };
+
+static struct blinky_data blinky = {my_led_first, 0};
 
 static int blinky_counter_to_duty_cycle(int blinky_counter)
 {
     return soft_pwm_max_pct -
            abs((blinky_counter % (2*soft_pwm_max_pct))-soft_pwm_max_pct);
 }
-
-static struct blinky_data blinky = {my_led_first, 0};
 
 static const char *led_color[] = {
     "\e[33myellow\e[0m",
@@ -113,8 +111,17 @@ static const char *led_color[] = {
 static void blinker(struct blinky_data *data)
 {
     int old_led_idx = data->led_idx;
+    const int counter_top = soft_pwm_max_pct * 2 * device_id[data->led_idx];
 
-    if (data->counter >= soft_pwm_max_pct * 2 * device_id[data->led_idx])
+    if (!nrfx_systick_test(&data->timestamp,
+                           duty_cycle_update_period_us))
+    {
+        return;
+    }
+
+    nrfx_systick_get(&data->timestamp);
+
+    if (data->counter >= counter_top)
     {
         data->counter = 0;
 
@@ -157,12 +164,19 @@ int main(void)
     enum soft_pwm_init_result pwm_res;
     enum button_init_result btn_res;
 
-    nrfx_systick_state_t blinky_timestamp;
-
     my_board_init();
+
+    nrfx_systick_init();
+
+    nrf_drv_clock_init();
+    nrf_drv_clock_lfclk_request(NULL);
+
+    logs_init();
+    NRF_LOG_INFO("Starting up the test project with USB logging");
 
     pwm_res = soft_pwm_init(&pwm,
                             pwm_channels,
+                            pwm_channels_id,
                             pwm_channels_amount,
                             pwm_period_us,
                             pwm_channel_on,
@@ -189,19 +203,11 @@ int main(void)
         }
     }
 
-    nrfx_systick_init();
-
-    nrf_drv_clock_init();
-    nrf_drv_clock_lfclk_request(NULL);
-
     app_timer_init();
     app_timer_create(&button_timer,
                      APP_TIMER_MODE_REPEATED,
                      button_timer_handler);
     app_timer_start(button_timer, APP_TIMER_TICKS(1), NULL);
-
-    logs_init();
-    NRF_LOG_INFO("Starting up the test project with USB logging");
 
     while (true)
     {
@@ -209,14 +215,6 @@ int main(void)
 
         LOG_BACKEND_USB_PROCESS();
         NRF_LOG_PROCESS();
-
-        if (!nrfx_systick_test(&blinky_timestamp,
-                               duty_cycle_update_period_us))
-        {
-            continue;
-        }
-
-        nrfx_systick_get(&blinky_timestamp);
 
         if (do_blinky)
         {

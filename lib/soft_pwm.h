@@ -17,12 +17,10 @@ enum soft_pwm_init_result {
 };
 
 struct soft_pwm_channel {
-    uint8_t id;
-    uint8_t duty_cycle_pct;
-
-    /* for internal use only*/
-    bool is_set;
     uint32_t duty_cycle_us;
+    uint16_t id;
+    uint8_t duty_cycle_pct;
+    bool is_set;
 };
 
 struct soft_pwm {
@@ -39,6 +37,7 @@ struct soft_pwm {
 enum soft_pwm_init_result
 soft_pwm_init(struct soft_pwm *pwm,
               struct soft_pwm_channel *channels,
+              uint8_t *channels_id,
               uint16_t channels_amount,
               uint32_t period_us,
               void (*channel_on)(uint16_t),

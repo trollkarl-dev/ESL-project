@@ -3,6 +3,7 @@
 enum soft_pwm_init_result
 soft_pwm_init(struct soft_pwm *pwm,
               struct soft_pwm_channel *channels,
+              uint8_t *channels_id,
               uint16_t channels_amount,
               uint32_t period_us,
               void (*channel_on)(uint16_t),
@@ -12,6 +13,7 @@ soft_pwm_init(struct soft_pwm *pwm,
 
     if (pwm == NULL ||
         channels == NULL ||
+        channels_id == NULL ||
         channels_amount == 0 ||
         period_us == 0 ||
         channel_on == NULL ||
@@ -28,9 +30,11 @@ soft_pwm_init(struct soft_pwm *pwm,
 
     for (channel_idx = 0; channel_idx < channels_amount; channel_idx++)
     {
+        channels[channel_idx].id = channels_id[channel_idx];
+        channels[channel_idx].is_set = false;
+
         channels[channel_idx].duty_cycle_pct = 0;
         channels[channel_idx].duty_cycle_us = 0;
-        channels[channel_idx].is_set = false;
     }
 
     return soft_pwm_init_success;
@@ -67,7 +71,7 @@ void soft_pwm_routine(struct soft_pwm *pwm)
         for (idx = 0; idx < pwm->channels_amount; idx++)
         {
             if (!pwm->channels[idx].is_set &&
-                pwm->channels[idx].duty_cycle_pct != 0)
+                pwm->channels[idx].duty_cycle_us != 0)
             {
                 pwm->channel_on(pwm->channels[idx].id);
                 pwm->channels[idx].is_set = true;
@@ -80,7 +84,7 @@ void soft_pwm_routine(struct soft_pwm *pwm)
     /* test channels */
     for (idx = 0; idx < pwm->channels_amount; idx++)
     {
-        if (pwm->channels[idx].duty_cycle_pct == 100)
+        if (pwm->channels[idx].duty_cycle_us >= pwm->period_us)
         {
             continue;
         }

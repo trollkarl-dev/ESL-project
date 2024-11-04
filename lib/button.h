@@ -37,7 +37,9 @@ button_init(struct button *btn,
             bool (*is_pressed)(void),
             void (*callback)(uint8_t));
 
-void button_check(struct button *);
+void button_check(struct button *); /* must be called */
+                                    /* with a certain periodicity */
+                                    /* (every 1 ms, for example). */
 
 #ifdef __cplusplus
 }
