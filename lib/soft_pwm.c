@@ -1,15 +1,23 @@
 #include "soft_pwm.h"
 
+static void soft_pwm_channel_init(struct soft_pwm_channel *ch, uint16_t id)
+{
+    ch->id = id;
+    ch->is_set = false;
+    ch->duty_cycle_pct = 0;
+    ch->duty_cycle_us = 0;
+}
+
 enum soft_pwm_init_result
 soft_pwm_init(struct soft_pwm *pwm,
               struct soft_pwm_channel *channels,
-              uint8_t *channels_id,
+              uint16_t *channels_id,
               uint16_t channels_amount,
               uint32_t period_us,
               void (*channel_on)(uint16_t),
               void (*channel_off)(uint16_t))
 {
-    uint16_t channel_idx;
+    uint16_t chan_idx;
 
     if (pwm == NULL ||
         channels == NULL ||
@@ -28,13 +36,9 @@ soft_pwm_init(struct soft_pwm *pwm,
     pwm->channel_on = channel_on;
     pwm->channel_off = channel_off;
 
-    for (channel_idx = 0; channel_idx < channels_amount; channel_idx++)
+    for (chan_idx = 0; chan_idx < channels_amount; chan_idx++)
     {
-        channels[channel_idx].id = channels_id[channel_idx];
-        channels[channel_idx].is_set = false;
-
-        channels[channel_idx].duty_cycle_pct = 0;
-        channels[channel_idx].duty_cycle_us = 0;
+        soft_pwm_channel_init(&(channels[chan_idx]), channels_id[chan_idx]);
     }
 
     return soft_pwm_init_success;
@@ -47,7 +51,9 @@ void soft_pwm_set_duty_cycle_pct(struct soft_pwm *pwm,
     uint32_t duty_cycle_us;
 
     duty_cycle_pct %= 1 + soft_pwm_max_pct;
-    duty_cycle_us = (((pwm->period_us << 8) / 100) * duty_cycle_pct) >> 8;
+
+    duty_cycle_us = (pwm->period_us << 8) / soft_pwm_max_pct;
+    duty_cycle_us = (duty_cycle_us * duty_cycle_pct) >> 8;
 
     pwm->channels[ch].duty_cycle_pct = duty_cycle_pct;
     pwm->channels[ch].duty_cycle_us = duty_cycle_us;

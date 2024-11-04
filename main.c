@@ -35,7 +35,7 @@ static const uint8_t device_id[] = {6, 5, 8, 2};
 
 static struct soft_pwm pwm;
 static struct soft_pwm_channel pwm_channels[pwm_channels_amount];
-static uint8_t pwm_channels_id[] = {0, 1, 2, 3}; /* LED number on the board */
+static uint16_t pwm_channels_id[] = {0, 1, 2, 3}; /* LED number on the board */
 
 void soft_pwm_systick_get(soft_pwm_timestamp_t * timestamp)
 {
@@ -60,7 +60,6 @@ static void pwm_channel_off(uint16_t id)
 }
 
 static volatile struct button main_button;
-
 
 static bool main_button_is_pressed(void)
 {
@@ -184,6 +183,7 @@ int main(void)
 
     if (pwm_res != soft_pwm_init_success)
     {
+        NRF_LOG_INFO("Unable to init Soft PWM!");
         while (true)
         {
 
@@ -197,6 +197,7 @@ int main(void)
 
     if (btn_res != button_init_success)
     {
+        NRF_LOG_INFO("Unable to init button!");
         while (true)
         {
 

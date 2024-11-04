@@ -37,7 +37,7 @@ struct soft_pwm {
 enum soft_pwm_init_result
 soft_pwm_init(struct soft_pwm *pwm,
               struct soft_pwm_channel *channels,
-              uint8_t *channels_id,
+              uint16_t *channels_id,
               uint16_t channels_amount,
               uint32_t period_us,
               void (*channel_on)(uint16_t),
