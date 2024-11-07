@@ -37,36 +37,14 @@ static struct soft_pwm pwm;
 static struct soft_pwm_channel pwm_channels[pwm_channels_amount];
 static uint16_t pwm_channels_id[] = {0, 1, 2, 3}; /* LED number on the board */
 
-void soft_pwm_systick_get(soft_pwm_timestamp_t * timestamp)
-{
-    nrfx_systick_get(timestamp);
-
-}
-
-bool soft_pwm_systick_test(soft_pwm_timestamp_t const * timestamp,
-                           uint32_t us)
-{
-    return nrfx_systick_test(timestamp, us);
-}
-
-static void pwm_channel_on(uint16_t id)
-{
-    my_led_on(id);
-}
-
-static void pwm_channel_off(uint16_t id)
-{
-    my_led_off(id);
-}
-
 static volatile struct button main_button;
 
-static bool main_button_is_pressed(void)
+static bool main_button_read(void)
 {
     return my_btn_is_pressed(board_button_idx);
 }
 
-static void main_button_callback(uint8_t clicks)
+static void main_button_click_callback(uint8_t clicks)
 {
     if (clicks == 2)
     {
@@ -177,9 +155,7 @@ int main(void)
                             pwm_channels,
                             pwm_channels_id,
                             pwm_channels_amount,
-                            pwm_period_us,
-                            pwm_channel_on,
-                            pwm_channel_off);
+                            pwm_period_us);
 
     if (pwm_res != soft_pwm_init_success)
     {
@@ -192,8 +168,8 @@ int main(void)
 
     btn_res = button_init((struct button *) &main_button,
                           btn_double_click_pause,
-                          main_button_is_pressed,
-                          main_button_callback);
+                          main_button_read,
+                          main_button_click_callback);
 
     if (btn_res != button_init_success)
     {

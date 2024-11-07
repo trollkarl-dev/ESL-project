@@ -64,6 +64,7 @@ SRC_FILES += \
   $(PROJ_DIR)/lib/my_board.c \
   $(PROJ_DIR)/lib/button.c \
   $(PROJ_DIR)/lib/soft_pwm.c \
+  $(PROJ_DIR)/lib/soft_pwm_deps.c \
   $(PROJ_DIR)/main.c \
 
 # Include folders common to all targets

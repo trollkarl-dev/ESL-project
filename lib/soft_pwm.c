@@ -13,9 +13,7 @@ soft_pwm_init(struct soft_pwm *pwm,
               struct soft_pwm_channel *channels,
               uint16_t *channels_id,
               uint16_t channels_amount,
-              uint32_t period_us,
-              void (*channel_on)(uint16_t),
-              void (*channel_off)(uint16_t))
+              uint32_t period_us)
 {
     uint16_t chan_idx;
 
@@ -23,9 +21,7 @@ soft_pwm_init(struct soft_pwm *pwm,
         channels == NULL ||
         channels_id == NULL ||
         channels_amount == 0 ||
-        period_us == 0 ||
-        channel_on == NULL ||
-        channel_off == NULL)
+        period_us == 0)
     {
         return soft_pwm_init_fail;
     }
@@ -33,8 +29,6 @@ soft_pwm_init(struct soft_pwm *pwm,
     pwm->channels = channels;
     pwm->channels_amount = channels_amount;
     pwm->period_us = period_us;
-    pwm->channel_on = channel_on;
-    pwm->channel_off = channel_off;
 
     for (chan_idx = 0; chan_idx < channels_amount; chan_idx++)
     {
@@ -51,9 +45,7 @@ void soft_pwm_set_duty_cycle_pct(struct soft_pwm *pwm,
     uint32_t duty_cycle_us;
 
     duty_cycle_pct %= 1 + soft_pwm_max_pct;
-
-    duty_cycle_us = (pwm->period_us << 8) / soft_pwm_max_pct;
-    duty_cycle_us = (duty_cycle_us * duty_cycle_pct) >> 8;
+    duty_cycle_us = (pwm->period_us / soft_pwm_max_pct) * duty_cycle_pct;
 
     pwm->channels[ch].duty_cycle_pct = duty_cycle_pct;
     pwm->channels[ch].duty_cycle_us = duty_cycle_us;
@@ -79,7 +71,7 @@ void soft_pwm_routine(struct soft_pwm *pwm)
             if (!pwm->channels[idx].is_set &&
                 pwm->channels[idx].duty_cycle_us != 0)
             {
-                pwm->channel_on(pwm->channels[idx].id);
+                soft_pwm_channel_on(pwm->channels[idx].id);
                 pwm->channels[idx].is_set = true;
             }
         }
@@ -99,7 +91,7 @@ void soft_pwm_routine(struct soft_pwm *pwm)
             soft_pwm_systick_test(&(pwm->timestamp),
                                   pwm->channels[idx].duty_cycle_us))
         {
-            pwm->channel_off(pwm->channels[idx].id);
+            soft_pwm_channel_off(pwm->channels[idx].id);
             pwm->channels[idx].is_set = false;
         }
     }

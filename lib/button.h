@@ -8,10 +8,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
-enum {
-    b_shift_reg_top  = 0xFF,
-    b_shift_reg_down = 0x00
-};
+enum { button_debounce_timer_top = 10 };
 
 enum button_init_result {
     button_init_success = 0,
@@ -19,23 +16,23 @@ enum button_init_result {
 };
 
 struct button {
-    uint8_t shift_reg;
+    uint8_t debounce_timer;
     uint8_t click_counter;
 
     uint16_t prev_click_timer;
     uint16_t double_click_pause;
 
-    bool pressed_flag;
+    bool is_pressed;
 
-    bool (*is_pressed)(void);
-    void (*callback)(uint8_t);
+    bool (*read)(void);
+    void (*click_callback)(uint8_t clicks);
 };
 
 enum button_init_result
 button_init(struct button *btn,
             uint16_t double_click_pause,
-            bool (*is_pressed)(void),
-            void (*callback)(uint8_t));
+            bool (*read)(void),
+            void (*click_callback)(uint8_t));
 
 void button_check(struct button *); /* must be called */
                                     /* with a certain periodicity */
