@@ -13,7 +13,6 @@ $(OUTPUT_DIRECTORY)/nrf52840_xxaa.out: \
 # Source files common to all targets
 SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/mdk/gcc_startup_nrf52840.S \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
   $(SDK_ROOT)/components/boards/boards.c \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_power.c \
@@ -24,6 +23,7 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uart.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_usbd.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_pwm.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_gpiote.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/components/libraries/bsp/bsp.c \
   $(SDK_ROOT)/components/libraries/log/src/nrf_log_frontend.c \

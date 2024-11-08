@@ -3,10 +3,9 @@
 #include <stdlib.h>
 
 #include "nrf_drv_clock.h"
-#include "nrfx_systick.h"
 #include "app_timer.h"
 #include "nrfx_pwm.h"
-#include "nrf_gpio.h"
+#include "nrfx_gpiote.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -20,13 +19,15 @@
 #include "lib/my_board.h"
 #include "lib/button.h"
 
-APP_TIMER_DEF(button_timer);
+
+/* APP_TIMER_DEF(button_timer); */
+APP_TIMER_DEF(blinky_timer);
 
 enum { board_button_idx = 0 };
-enum { btn_double_click_pause = 200 };
+/*enum { btn_double_click_pause = 200 }; */
 
 enum { max_pct = 100 };
-enum { duty_cycle_update_period_us = 5000 };
+enum { duty_cycle_update_period_ms = 5 };
 
 static volatile bool do_blinky = true;
 
@@ -99,6 +100,7 @@ static void pwm_set_duty_cycle(pwm_wrapper_t *pwm,
     }
 }
 
+/*
 static volatile struct button main_button;
 
 static bool main_button_read(void)
@@ -125,11 +127,11 @@ static void button_timer_handler(void *ctx)
 {
     button_check((struct button *) &main_button);
 }
+*/
 
 struct blinky_data {
     int led_idx;
     int counter;
-    nrfx_systick_state_t timestamp;
 };
 
 static struct blinky_data blinky = {my_led_first, 0};
@@ -151,14 +153,6 @@ static void blinker(struct blinky_data *data)
 {
     int old_led_idx = data->led_idx;
     const int counter_top = max_pct * 2 * device_id[data->led_idx];
-
-    if (!nrfx_systick_test(&data->timestamp,
-                           duty_cycle_update_period_us))
-    {
-        return;
-    }
-
-    nrfx_systick_get(&data->timestamp);
 
     if (data->counter >= counter_top)
     {
@@ -190,6 +184,14 @@ static void blinker(struct blinky_data *data)
     }
 }
 
+static void blinky_timer_handler(void *ctx)
+{
+    if (do_blinky)
+    {
+        blinker(&blinky);
+    }
+}
+
 void logs_init()
 {
     ret_code_t ret = NRF_LOG_INIT(NULL);
@@ -198,13 +200,21 @@ void logs_init()
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
+static nrfx_gpiote_in_config_t
+gpiote_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
+
+void my_btn_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+{
+    do_blinky = !do_blinky;
+}
+
 int main(void)
 {
-    enum button_init_result btn_res;
+/*    enum button_init_result btn_res; */
 
-    my_btn_init(board_button_idx);
+/*    my_btn_init(board_button_idx); */
 
-    nrfx_systick_init();
+    nrfx_gpiote_init();
 
     nrf_drv_clock_init();
     nrf_drv_clock_lfclk_request(NULL);
@@ -212,9 +222,14 @@ int main(void)
     pwm_init(&my_pwm);
     pwm_run(&my_pwm);
 
+    gpiote_config.pull = NRF_GPIO_PIN_PULLUP;
+    nrfx_gpiote_in_init(my_btn_mappings[board_button_idx], &gpiote_config, my_btn_handler);
+    nrfx_gpiote_in_event_enable(my_btn_mappings[board_button_idx], true);
+
     logs_init();
     NRF_LOG_INFO("Starting up the test project with USB logging");
 
+/*
     btn_res = button_init((struct button *) &main_button,
                           btn_double_click_pause,
                           main_button_read,
@@ -228,21 +243,24 @@ int main(void)
 
         }
     }
-
+*/
     app_timer_init();
+/*
     app_timer_create(&button_timer,
                      APP_TIMER_MODE_REPEATED,
                      button_timer_handler);
     app_timer_start(button_timer, APP_TIMER_TICKS(1), NULL);
+*/
+    app_timer_create(&blinky_timer,
+                     APP_TIMER_MODE_REPEATED,
+                     blinky_timer_handler);
+    app_timer_start(blinky_timer, APP_TIMER_TICKS(duty_cycle_update_period_ms), NULL);
 
     while (true)
     {
         LOG_BACKEND_USB_PROCESS();
         NRF_LOG_PROCESS();
 
-        if (do_blinky)
-        {
-            blinker(&blinky);
-        }
+        __WFI();
     }
 }
