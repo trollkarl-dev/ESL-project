@@ -17,19 +17,21 @@
 #include "app_usbd_serial_num.h"
 
 #include "lib/my_board.h"
-#include "lib/button.h"
 
-
-/* APP_TIMER_DEF(button_timer); */
+APP_TIMER_DEF(debounce_timer);
 APP_TIMER_DEF(blinky_timer);
+APP_TIMER_DEF(dblclk_timer);
 
-enum { board_button_idx = 0 };
-/*enum { btn_double_click_pause = 200 }; */
+enum { brd_btn_idx = 0 };
+enum { btn_dblclk_pause = 200 };
 
 enum { max_pct = 100 };
-enum { duty_cycle_update_period_ms = 5 };
+enum { leds_upd_period_ms = 5 };
+enum { debounce_period_ms = 50 };
 
 static volatile bool do_blinky = true;
+static volatile bool btn_is_pressed = false;
+static volatile uint8_t clicks_counter = 0;
 
 static const uint8_t device_id[] = {6, 5, 8, 2};
 
@@ -100,35 +102,6 @@ static void pwm_set_duty_cycle(pwm_wrapper_t *pwm,
     }
 }
 
-/*
-static volatile struct button main_button;
-
-static bool main_button_read(void)
-{
-    return my_btn_is_pressed(board_button_idx);
-}
-
-static void main_button_click_callback(uint8_t clicks)
-{
-    if (clicks == 2)
-    {
-        do_blinky = !do_blinky;
-        NRF_LOG_INFO("Double click -> %s smooth blinking",
-                     do_blinky ? "Start" : "Freeze");
-    }
-    else
-    {
-        NRF_LOG_INFO("The reaction to this number "
-                     "of clicks (%d) is not defined.", clicks);
-    }
-}
-
-static void button_timer_handler(void *ctx)
-{
-    button_check((struct button *) &main_button);
-}
-*/
-
 struct blinky_data {
     int led_idx;
     int counter;
@@ -192,6 +165,41 @@ static void blinky_timer_handler(void *ctx)
     }
 }
 
+static void dblclk_timer_handler(void *ctx)
+{
+    if (!btn_is_pressed && clicks_counter != 0)
+    {
+        NRF_LOG_INFO("Clicks - %d", clicks_counter);
+
+        if (clicks_counter == 3)
+        {
+            do_blinky = !do_blinky;
+        }
+
+        clicks_counter = 0;
+    }
+}
+
+static void debounce_timer_handler(void *ctx)
+{
+    if (my_btn_is_pressed(brd_btn_idx) && !btn_is_pressed)
+    {
+        btn_is_pressed = true;
+        clicks_counter++;
+    }
+
+    if (!my_btn_is_pressed(brd_btn_idx) && btn_is_pressed)
+    {
+        btn_is_pressed = false;
+        app_timer_start(dblclk_timer, APP_TIMER_TICKS(btn_dblclk_pause), NULL);
+    }
+}
+
+void btn_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+{
+    app_timer_start(debounce_timer, APP_TIMER_TICKS(debounce_period_ms), NULL);
+}
+
 void logs_init()
 {
     ret_code_t ret = NRF_LOG_INIT(NULL);
@@ -203,58 +211,37 @@ void logs_init()
 static nrfx_gpiote_in_config_t
 gpiote_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
 
-void my_btn_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
-{
-    do_blinky = !do_blinky;
-}
-
 int main(void)
 {
-/*    enum button_init_result btn_res; */
-
-/*    my_btn_init(board_button_idx); */
-
-    nrfx_gpiote_init();
-
     nrf_drv_clock_init();
     nrf_drv_clock_lfclk_request(NULL);
 
     pwm_init(&my_pwm);
     pwm_run(&my_pwm);
 
+    nrfx_gpiote_init();
+
     gpiote_config.pull = NRF_GPIO_PIN_PULLUP;
-    nrfx_gpiote_in_init(my_btn_mappings[board_button_idx], &gpiote_config, my_btn_handler);
-    nrfx_gpiote_in_event_enable(my_btn_mappings[board_button_idx], true);
+    nrfx_gpiote_in_init(my_btn_mappings[brd_btn_idx], &gpiote_config, btn_handler);
+    nrfx_gpiote_in_event_enable(my_btn_mappings[brd_btn_idx], true);
 
     logs_init();
     NRF_LOG_INFO("Starting up the test project with USB logging");
 
-/*
-    btn_res = button_init((struct button *) &main_button,
-                          btn_double_click_pause,
-                          main_button_read,
-                          main_button_click_callback);
-
-    if (btn_res != button_init_success)
-    {
-        NRF_LOG_INFO("Unable to init button!");
-        while (true)
-        {
-
-        }
-    }
-*/
     app_timer_init();
-/*
-    app_timer_create(&button_timer,
-                     APP_TIMER_MODE_REPEATED,
-                     button_timer_handler);
-    app_timer_start(button_timer, APP_TIMER_TICKS(1), NULL);
-*/
+
+    app_timer_create(&debounce_timer,
+                     APP_TIMER_MODE_SINGLE_SHOT,
+                     debounce_timer_handler);
+
+    app_timer_create(&dblclk_timer,
+                     APP_TIMER_MODE_SINGLE_SHOT,
+                     dblclk_timer_handler);
+
     app_timer_create(&blinky_timer,
                      APP_TIMER_MODE_REPEATED,
                      blinky_timer_handler);
-    app_timer_start(blinky_timer, APP_TIMER_TICKS(duty_cycle_update_period_ms), NULL);
+    app_timer_start(blinky_timer, APP_TIMER_TICKS(leds_upd_period_ms), NULL);
 
     while (true)
     {

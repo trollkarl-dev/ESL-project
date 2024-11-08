@@ -63,7 +63,6 @@ SRC_FILES += \
   $(SDK_ROOT)/external/fprintf/nrf_fprintf_format.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/lib/my_board.c \
-  $(PROJ_DIR)/lib/button.c \
   $(PROJ_DIR)/main.c \
 
 # Include folders common to all targets
