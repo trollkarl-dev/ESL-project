@@ -23,6 +23,7 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uart.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_usbd.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_pwm.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/components/libraries/bsp/bsp.c \
   $(SDK_ROOT)/components/libraries/log/src/nrf_log_frontend.c \
@@ -63,8 +64,6 @@ SRC_FILES += \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/lib/my_board.c \
   $(PROJ_DIR)/lib/button.c \
-  $(PROJ_DIR)/lib/soft_pwm.c \
-  $(PROJ_DIR)/lib/soft_pwm_deps.c \
   $(PROJ_DIR)/main.c \
 
 # Include folders common to all targets
