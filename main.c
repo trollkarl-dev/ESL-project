@@ -32,9 +32,9 @@ static volatile bool do_blinky = true;
 
 static const uint8_t device_id[] = {6, 5, 8, 2};
 
-static nrfx_pwm_t my_pwm = NRFX_PWM_INSTANCE(0);
+static nrfx_pwm_t my_pwm_instance = NRFX_PWM_INSTANCE(0);
 static nrf_pwm_values_individual_t my_pwm_seq_values;
-static nrf_pwm_sequence_t const    my_pwm_seq =
+static nrf_pwm_sequence_t const my_pwm_seq =
 {
     .values.p_individual = &my_pwm_seq_values,
     .length              = NRF_PWM_VALUES_LENGTH(my_pwm_seq_values),
@@ -42,16 +42,29 @@ static nrf_pwm_sequence_t const    my_pwm_seq =
     .end_delay           = 0
 };
 
-static bool hw_pwm_init(nrfx_pwm_t *pwm)
+typedef struct {
+    nrfx_pwm_t *pwm;
+    nrf_pwm_values_individual_t *seq_values;
+    nrf_pwm_sequence_t const * seq;
+} pwm_wrapper_t;
+
+static pwm_wrapper_t my_pwm =
+{
+    .pwm = &my_pwm_instance,
+    .seq_values = &my_pwm_seq_values,
+    .seq = &my_pwm_seq
+};
+
+static bool pwm_init(pwm_wrapper_t *pwm)
 {
     static nrfx_pwm_config_t const my_pwm_config =
     {
         .output_pins =
         {
-            NRF_GPIO_PIN_MAP(0,  6) | NRFX_PWM_PIN_INVERTED,
-            NRF_GPIO_PIN_MAP(0,  8) | NRFX_PWM_PIN_INVERTED,
-            NRF_GPIO_PIN_MAP(1,  9) | NRFX_PWM_PIN_INVERTED,
-            NRF_GPIO_PIN_MAP(0,  12 | NRFX_PWM_PIN_INVERTED),
+            my_led_mappings[0] | NRFX_PWM_PIN_INVERTED,
+            my_led_mappings[1] | NRFX_PWM_PIN_INVERTED,
+            my_led_mappings[2] | NRFX_PWM_PIN_INVERTED,
+            my_led_mappings[3] | NRFX_PWM_PIN_INVERTED,
         },
         .irq_priority = APP_IRQ_PRIORITY_LOWEST,
         .base_clock   = NRF_PWM_CLK_1MHz,
@@ -61,21 +74,28 @@ static bool hw_pwm_init(nrfx_pwm_t *pwm)
         .step_mode    = NRF_PWM_STEP_AUTO,
     };
 
-    return (nrfx_pwm_init(pwm,
+    return (nrfx_pwm_init(pwm->pwm,
                           &my_pwm_config,
                           NULL) == NRF_SUCCESS);
 }
 
-static void hw_pwm_set_duty_cycle(uint8_t channel, uint32_t duty_cycle)
+static void pwm_run(pwm_wrapper_t *pwm)
+{
+    nrfx_pwm_simple_playback(pwm->pwm, pwm->seq, 1, NRFX_PWM_FLAG_LOOP);
+}
+
+static void pwm_set_duty_cycle(pwm_wrapper_t *pwm,
+                               uint8_t channel,
+                               uint32_t duty_cycle)
 {
     duty_cycle %= 1 + max_pct;
 
     switch (channel)
     {
-        case 0: my_pwm_seq_values.channel_0 = duty_cycle; break;
-        case 1: my_pwm_seq_values.channel_1 = duty_cycle; break;
-        case 2: my_pwm_seq_values.channel_2 = duty_cycle; break;
-        case 3: my_pwm_seq_values.channel_3 = duty_cycle; break;
+        case 0: pwm->seq_values->channel_0 = duty_cycle; break;
+        case 1: pwm->seq_values->channel_1 = duty_cycle; break;
+        case 2: pwm->seq_values->channel_2 = duty_cycle; break;
+        case 3: pwm->seq_values->channel_3 = duty_cycle; break;
     }
 }
 
@@ -158,8 +178,9 @@ static void blinker(struct blinky_data *data)
         data->counter++;
     }
 
-    hw_pwm_set_duty_cycle(data->led_idx,
-                          blinky_counter_to_duty_cycle(data->counter));
+    pwm_set_duty_cycle(&my_pwm,
+                       data->led_idx,
+                       blinky_counter_to_duty_cycle(data->counter));
 
     if (data->led_idx != old_led_idx)
     {
@@ -188,8 +209,8 @@ int main(void)
     nrf_drv_clock_init();
     nrf_drv_clock_lfclk_request(NULL);
 
-    hw_pwm_init(&my_pwm);
-    nrfx_pwm_simple_playback(&my_pwm, &my_pwm_seq, 1, NRFX_PWM_FLAG_LOOP);
+    pwm_init(&my_pwm);
+    pwm_run(&my_pwm);
 
     logs_init();
     NRF_LOG_INFO("Starting up the test project with USB logging");
@@ -216,8 +237,6 @@ int main(void)
 
     while (true)
     {
-/*        soft_pwm_routine(&pwm); */
-
         LOG_BACKEND_USB_PROCESS();
         NRF_LOG_PROCESS();
 

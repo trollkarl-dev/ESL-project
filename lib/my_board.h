@@ -7,6 +7,8 @@ extern "C" {
 
 #include <stdbool.h>
 
+#include "nrf_gpio.h"
+
 enum {
     my_led_first = 0,
     my_led_last = 3,
@@ -22,6 +24,17 @@ enum {
 };
 
 enum { my_btn_active_level = 0 }; /* must be 0 or 1 */
+
+static const int my_led_mappings[] = {
+    NRF_GPIO_PIN_MAP(0,  6),
+    NRF_GPIO_PIN_MAP(0,  8),
+    NRF_GPIO_PIN_MAP(1,  9),
+    NRF_GPIO_PIN_MAP(0, 12),
+};
+
+static const int my_btn_mappings[] = {
+    NRF_GPIO_PIN_MAP(1,  6)
+};
 
 void my_led_init(int idx);
 void my_led_on(int idx);

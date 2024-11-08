@@ -1,18 +1,5 @@
 #include "my_board.h"
 
-#include "nrf_gpio.h"
-
-static const int my_led_mappings[] = {
-    NRF_GPIO_PIN_MAP(0,  6),
-    NRF_GPIO_PIN_MAP(0,  8),
-    NRF_GPIO_PIN_MAP(1,  9),
-    NRF_GPIO_PIN_MAP(0, 12),
-};
-
-static const int my_btn_mappings[] = {
-    NRF_GPIO_PIN_MAP(1,  6)
-};
-
 static bool my_btn_check_idx(int idx)
 {
     return ((idx >= my_btn_first) && (idx <= my_btn_last));
