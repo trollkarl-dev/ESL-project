@@ -18,6 +18,7 @@
 
 #include "lib/my_board.h"
 
+APP_TIMER_DEF(displaymode_timer);
 APP_TIMER_DEF(debounce_timer);
 APP_TIMER_DEF(blinky_timer);
 APP_TIMER_DEF(dblclk_timer);
@@ -26,14 +27,73 @@ enum { brd_btn_idx = 0 };
 enum { btn_dblclk_pause = 200 };
 
 enum { max_pct = 100 };
-enum { leds_upd_period_ms = 5 };
+
+enum { leds_upd_period_ms = 50 };
 enum { debounce_period_ms = 50 };
 
-static volatile bool do_blinky = true;
+enum { displaymode_slow_ms = 10 };
+enum { displaymode_fast_ms = 2 };
+
+static volatile int displaymode_counter = 0;
+
 static volatile bool btn_is_pressed = false;
 static volatile uint8_t clicks_counter = 0;
 
-static const uint8_t device_id[] = {6, 5, 8, 2};
+static const uint8_t device_id[] =  {6, 5, 8, 2};
+
+enum { max_hue = 360 };
+enum { max_saturation = max_pct };
+enum { max_brightness = max_pct };
+
+static const uint16_t default_hue = ((device_id[2]*10 + device_id[3]) * max_hue) / max_pct;
+
+typedef struct {
+    uint16_t h;
+    uint8_t s;
+    uint8_t v;
+} hsv_t;
+
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} rgb_t;
+
+static volatile hsv_t hsv_color =
+{
+    default_hue,
+    max_saturation,
+    max_brightness
+};
+
+static rgb_t hsv2rgb(hsv_t hsv)
+{
+    const int sector = (hsv.h / 60) % 6;
+    const int vmin = (((hsv.v * (100 - hsv.s)) << 8) / 100) >> 8;
+    const int a = ((((hsv.v - vmin) * (hsv.h % 60)) << 8) / 60) >> 8;
+    const int vinc = vmin + a;
+    const int vdec = hsv.v - a;
+
+    switch (sector)
+    {
+        case 0:  return (rgb_t) {hsv.v, vinc, vmin}; break;
+        case 1:  return (rgb_t) {vdec, hsv.v, vmin}; break;
+        case 2:  return (rgb_t) {vmin, hsv.v, vinc}; break;
+        case 3:  return (rgb_t) {vmin, vdec, hsv.v}; break;
+        case 4:  return (rgb_t) {vinc, vmin, hsv.v}; break;
+        case 5:
+        default: return (rgb_t) {hsv.v, vmin, vdec}; break;
+    }
+}
+
+typedef enum {
+    cp_state_noinpt,
+    cp_state_huemod,
+    cp_state_satmod,
+    cp_state_valmod
+} colorpicker_state_t;
+
+static volatile colorpicker_state_t current_state = cp_state_noinpt;
 
 static nrfx_pwm_t my_pwm_instance = NRFX_PWM_INSTANCE(0);
 static nrf_pwm_values_individual_t my_pwm_seq_values;
@@ -102,66 +162,46 @@ static void pwm_set_duty_cycle(pwm_wrapper_t *pwm,
     }
 }
 
-struct blinky_data {
-    int led_idx;
-    int counter;
-};
-
-static struct blinky_data blinky = {my_led_first, 0};
-
-static int blinky_counter_to_duty_cycle(int blinky_counter)
+static void colorpicker_update_led(hsv_t hsv)
 {
-    return max_pct -
-           abs((blinky_counter % (2*max_pct))-max_pct);
+    rgb_t rgb = hsv2rgb(hsv);
+
+    pwm_set_duty_cycle(&my_pwm, 1, rgb.r);
+    pwm_set_duty_cycle(&my_pwm, 2, rgb.g);
+    pwm_set_duty_cycle(&my_pwm, 3, rgb.b);
+
+    NRF_LOG_INFO("(%d, %d, %d)", rgb.r, rgb.g, rgb.b);
 }
 
-static const char *led_color[] = {
-    "\e[33myellow\e[0m",
-    "\e[31mred\e[0m",
-    "\e[32mgreen\e[0m",
-    "\e[34mblue\e[0m"
-};
-
-static void blinker(struct blinky_data *data)
-{
-    int old_led_idx = data->led_idx;
-    const int counter_top = max_pct * 2 * device_id[data->led_idx];
-
-    if (data->counter >= counter_top)
-    {
-        data->counter = 0;
-
-        if (data->led_idx >= my_led_last)
-        {
-            data->led_idx = my_led_first;
-        }
-        else
-        {
-            data->led_idx++;
-        }
-    }
-    else
-    {
-        data->counter++;
-    }
-
-    pwm_set_duty_cycle(&my_pwm,
-                       data->led_idx,
-                       blinky_counter_to_duty_cycle(data->counter));
-
-    if (data->led_idx != old_led_idx)
-    {
-        NRF_LOG_INFO("LED #%d (%s) is blinking",
-                     data->led_idx,
-                     led_color[data->led_idx]);
-    }
-}
+static uint8_t colorpicker_sat_counter = 0;
+static uint8_t colorpicker_val_counter = 0;
 
 static void blinky_timer_handler(void *ctx)
 {
-    if (do_blinky)
+    colorpicker_update_led(hsv_color);
+
+    switch (current_state)
     {
-        blinker(&blinky);
+        case cp_state_huemod:
+            hsv_color.h = (hsv_color.h + 1) % max_hue;
+            break;
+        case cp_state_satmod:
+            colorpicker_sat_counter++;
+            colorpicker_sat_counter %= 2*max_pct;
+            hsv_color.s = abs(colorpicker_sat_counter - max_pct);
+            break;
+        case cp_state_valmod:
+            colorpicker_val_counter++;
+            colorpicker_val_counter %= 2*max_pct;
+            hsv_color.v = abs(colorpicker_val_counter - max_pct);
+            break;
+        default:
+            break;
+    }
+
+    if (btn_is_pressed && my_btn_is_pressed(brd_btn_idx))
+    {
+        app_timer_start(blinky_timer, APP_TIMER_TICKS(leds_upd_period_ms), NULL);
     }
 }
 
@@ -171,23 +211,47 @@ static void dblclk_timer_handler(void *ctx)
     {
         NRF_LOG_INFO("Clicks - %d", clicks_counter);
 
-        if (clicks_counter == 3)
+        if (clicks_counter == 2)
         {
-            do_blinky = !do_blinky;
+            current_state = (current_state == cp_state_valmod) ? cp_state_noinpt : current_state + 1;
+            displaymode_counter = 0;
         }
 
         clicks_counter = 0;
     }
 }
 
+static void displaymode_timer_handler(void *ctx)
+{
+    uint32_t period = APP_TIMER_TICKS(current_state == cp_state_satmod ? displaymode_fast_ms : displaymode_slow_ms);
+
+    switch (current_state)
+    {
+        case cp_state_noinpt:
+            pwm_set_duty_cycle(&my_pwm, 0, 0);
+            break;
+        case cp_state_valmod:
+            pwm_set_duty_cycle(&my_pwm, 0, max_pct);
+            break;
+        default:
+            displaymode_counter = (displaymode_counter + 1) % (2*max_pct);
+            pwm_set_duty_cycle(&my_pwm, 0, max_pct - abs(displaymode_counter - max_pct));
+    }
+
+    app_timer_start(displaymode_timer, period, NULL);
+}
+
 static void debounce_timer_handler(void *ctx)
 {
+    /* rising */
     if (my_btn_is_pressed(brd_btn_idx) && !btn_is_pressed)
     {
         btn_is_pressed = true;
         clicks_counter++;
+        app_timer_start(blinky_timer, APP_TIMER_TICKS(leds_upd_period_ms), NULL);
     }
 
+    /* falling */
     if (!my_btn_is_pressed(brd_btn_idx) && btn_is_pressed)
     {
         btn_is_pressed = false;
@@ -239,9 +303,15 @@ int main(void)
                      dblclk_timer_handler);
 
     app_timer_create(&blinky_timer,
-                     APP_TIMER_MODE_REPEATED,
+                     APP_TIMER_MODE_SINGLE_SHOT,
                      blinky_timer_handler);
-    app_timer_start(blinky_timer, APP_TIMER_TICKS(leds_upd_period_ms), NULL);
+
+    app_timer_create(&displaymode_timer,
+                     APP_TIMER_MODE_SINGLE_SHOT,
+                     displaymode_timer_handler);
+    app_timer_start(displaymode_timer, APP_TIMER_TICKS(displaymode_fast_ms), NULL);
+
+    colorpicker_update_led(hsv_color);
 
     while (true)
     {
