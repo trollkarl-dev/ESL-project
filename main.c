@@ -18,9 +18,9 @@
 
 #include "lib/my_board.h"
 
-APP_TIMER_DEF(displaymode_timer);
+APP_TIMER_DEF(dispmode_timer);
 APP_TIMER_DEF(debounce_timer);
-APP_TIMER_DEF(blinky_timer);
+APP_TIMER_DEF(btnhold_timer);
 APP_TIMER_DEF(dblclk_timer);
 
 enum { brd_btn_idx = 0 };
@@ -28,16 +28,18 @@ enum { btn_dblclk_pause = 200 };
 
 enum { max_pct = 100 };
 
-enum { leds_upd_period_ms = 50 };
+enum { btnhold_period_ms = 100 };
 enum { debounce_period_ms = 50 };
 
-enum { displaymode_slow_ms = 10 };
-enum { displaymode_fast_ms = 2 };
+enum { dispmode_slow_ms = 10 };
+enum { dispmode_fast_ms = 2 };
 
-static volatile int displaymode_counter = 0;
-
-static volatile bool btn_is_pressed = false;
-static volatile uint8_t clicks_counter = 0;
+enum {
+    pwm_channel_indicator = my_led_first,
+    pwm_channel_red = my_led_first + 1,
+    pwm_channel_green = my_led_first + 2,
+    pwm_channel_blue = my_led_first + 3
+};
 
 static const uint8_t device_id[] =  {6, 5, 8, 2};
 
@@ -45,7 +47,8 @@ enum { max_hue = 360 };
 enum { max_saturation = max_pct };
 enum { max_brightness = max_pct };
 
-static const uint16_t default_hue = ((device_id[2]*10 + device_id[3]) * max_hue) / max_pct;
+static const uint16_t
+default_hue = ((device_id[2]*10 + device_id[3]) * max_hue) / max_pct;
 
 typedef struct {
     uint16_t h;
@@ -58,13 +61,6 @@ typedef struct {
     uint8_t g;
     uint8_t b;
 } rgb_t;
-
-static volatile hsv_t hsv_color =
-{
-    default_hue,
-    max_saturation,
-    max_brightness
-};
 
 static rgb_t hsv2rgb(hsv_t hsv)
 {
@@ -87,13 +83,74 @@ static rgb_t hsv2rgb(hsv_t hsv)
 }
 
 typedef enum {
-    cp_state_noinpt,
+    cp_state_noinpt = 0,
     cp_state_huemod,
     cp_state_satmod,
     cp_state_valmod
 } colorpicker_state_t;
 
-static volatile colorpicker_state_t current_state = cp_state_noinpt;
+typedef struct {
+    colorpicker_state_t state;
+    uint8_t sat_counter;
+    uint8_t val_counter;
+    hsv_t color;
+    int dispmode_counter;
+} colorpicker_t;
+
+static volatile colorpicker_t colorpicker =
+{
+    .state = cp_state_noinpt,
+    .sat_counter = 0,
+    .val_counter = 0,
+    .color =
+    {
+        .h = default_hue,
+        .s = max_saturation,
+        .v = max_brightness
+    },
+    .dispmode_counter = 0
+};
+
+typedef struct {
+    bool pressed_flag;
+    uint8_t clicks_counter;
+} button_t;
+
+static volatile button_t button =
+{
+    .pressed_flag = false,
+    .clicks_counter = 0
+};
+
+static bool button_read(void)
+{
+    return my_btn_is_pressed(brd_btn_idx);
+}
+
+static const char *colorpicker_modes[] =
+{
+    "No Input",
+    "Hue Modification",
+    "Saturation Modification",
+    "Brightness Modification"
+};
+
+static void button_onclick(uint8_t clicks)
+{
+    NRF_LOG_INFO("Clicks - %d", button.clicks_counter);
+
+    if (button.clicks_counter == 2)
+    {
+        if (colorpicker.state >= cp_state_valmod)
+            colorpicker.state = cp_state_noinpt;
+        else
+            colorpicker.state++;
+
+        NRF_LOG_INFO("%s mode is in progress",
+                     colorpicker_modes[colorpicker.state]);
+        colorpicker.dispmode_counter = 0;
+    }
+}
 
 static nrfx_pwm_t my_pwm_instance = NRFX_PWM_INSTANCE(0);
 static nrf_pwm_values_individual_t my_pwm_seq_values;
@@ -124,10 +181,10 @@ static bool pwm_init(pwm_wrapper_t *pwm)
     {
         .output_pins =
         {
-            my_led_mappings[0] | NRFX_PWM_PIN_INVERTED,
-            my_led_mappings[1] | NRFX_PWM_PIN_INVERTED,
-            my_led_mappings[2] | NRFX_PWM_PIN_INVERTED,
-            my_led_mappings[3] | NRFX_PWM_PIN_INVERTED,
+            my_led_mappings[pwm_channel_indicator] | NRFX_PWM_PIN_INVERTED,
+            my_led_mappings[pwm_channel_red]       | NRFX_PWM_PIN_INVERTED,
+            my_led_mappings[pwm_channel_green]     | NRFX_PWM_PIN_INVERTED,
+            my_led_mappings[pwm_channel_blue]      | NRFX_PWM_PIN_INVERTED,
         },
         .irq_priority = APP_IRQ_PRIORITY_LOWEST,
         .base_clock   = NRF_PWM_CLK_1MHz,
@@ -155,113 +212,136 @@ static void pwm_set_duty_cycle(pwm_wrapper_t *pwm,
 
     switch (channel)
     {
-        case 0: pwm->seq_values->channel_0 = duty_cycle; break;
-        case 1: pwm->seq_values->channel_1 = duty_cycle; break;
-        case 2: pwm->seq_values->channel_2 = duty_cycle; break;
-        case 3: pwm->seq_values->channel_3 = duty_cycle; break;
+        case pwm_channel_indicator:
+            pwm->seq_values->channel_0 = duty_cycle; break;
+        case pwm_channel_red:
+            pwm->seq_values->channel_1 = duty_cycle; break;
+        case pwm_channel_green:
+            pwm->seq_values->channel_2 = duty_cycle; break;
+        case pwm_channel_blue:
+            pwm->seq_values->channel_3 = duty_cycle; break;
     }
 }
 
-static void colorpicker_update_led(hsv_t hsv)
+static void colorpicker_show(colorpicker_t *c)
 {
-    rgb_t rgb = hsv2rgb(hsv);
+    rgb_t rgb = hsv2rgb(c->color);
 
-    pwm_set_duty_cycle(&my_pwm, 1, rgb.r);
-    pwm_set_duty_cycle(&my_pwm, 2, rgb.g);
-    pwm_set_duty_cycle(&my_pwm, 3, rgb.b);
+    pwm_set_duty_cycle(&my_pwm, pwm_channel_red, rgb.r);
+    pwm_set_duty_cycle(&my_pwm, pwm_channel_green, rgb.g);
+    pwm_set_duty_cycle(&my_pwm, pwm_channel_blue, rgb.b);
 
-    NRF_LOG_INFO("(%d, %d, %d)", rgb.r, rgb.g, rgb.b);
+    NRF_LOG_INFO("HSV: (%d, %d, %d), RGB (%%): (%d, %d, %d)",
+                 c->color.h,
+                 c->color.s,
+                 c->color.v,
+                 rgb.r, rgb.g, rgb.b);
 }
 
-static uint8_t colorpicker_sat_counter = 0;
-static uint8_t colorpicker_val_counter = 0;
-
-static void blinky_timer_handler(void *ctx)
+static void btnhold_timer_handler(void *ctx)
 {
-    colorpicker_update_led(hsv_color);
+    volatile colorpicker_t *cp = (volatile colorpicker_t *) ctx;
 
-    switch (current_state)
+    switch (colorpicker.state)
     {
         case cp_state_huemod:
-            hsv_color.h = (hsv_color.h + 1) % max_hue;
+            cp->color.h = (cp->color.h + 1) % max_hue;
             break;
         case cp_state_satmod:
-            colorpicker_sat_counter++;
-            colorpicker_sat_counter %= 2*max_pct;
-            hsv_color.s = abs(colorpicker_sat_counter - max_pct);
+            cp->sat_counter++;
+            cp->sat_counter %= 2*max_saturation;
+            cp->color.s = abs(cp->sat_counter - max_saturation);
             break;
         case cp_state_valmod:
-            colorpicker_val_counter++;
-            colorpicker_val_counter %= 2*max_pct;
-            hsv_color.v = abs(colorpicker_val_counter - max_pct);
+            cp->val_counter++;
+            cp->val_counter %= 2*max_brightness;
+            cp->color.v = abs(cp->val_counter - max_brightness);
             break;
         default:
             break;
     }
 
-    if (btn_is_pressed && my_btn_is_pressed(brd_btn_idx))
+    if (cp->state != cp_state_noinpt)
     {
-        app_timer_start(blinky_timer, APP_TIMER_TICKS(leds_upd_period_ms), NULL);
+        colorpicker_show((colorpicker_t *) ctx);
+    }
+
+    if (button_read() && button.pressed_flag)
+    {
+        app_timer_start(btnhold_timer,
+                        APP_TIMER_TICKS(btnhold_period_ms),
+                        ctx);
     }
 }
 
 static void dblclk_timer_handler(void *ctx)
 {
-    if (!btn_is_pressed && clicks_counter != 0)
+    /* button is released? */
+    if (!button.pressed_flag &&
+        button.clicks_counter != 0)
     {
-        NRF_LOG_INFO("Clicks - %d", clicks_counter);
-
-        if (clicks_counter == 2)
-        {
-            current_state = (current_state == cp_state_valmod) ? cp_state_noinpt : current_state + 1;
-            displaymode_counter = 0;
-        }
-
-        clicks_counter = 0;
+        button_onclick(button.clicks_counter);
+        button.clicks_counter = 0;
     }
 }
 
-static void displaymode_timer_handler(void *ctx)
+static void dispmode_timer_handler(void *ctx)
 {
-    uint32_t period = APP_TIMER_TICKS(current_state == cp_state_satmod ? displaymode_fast_ms : displaymode_slow_ms);
+    uint32_t period;
+    uint8_t duty_cycle;
+    volatile colorpicker_t *cp = (volatile colorpicker_t *) ctx;
 
-    switch (current_state)
+    if (colorpicker.state == cp_state_satmod)
+        period = APP_TIMER_TICKS(dispmode_fast_ms);
+    else
+        period = APP_TIMER_TICKS(dispmode_slow_ms);
+
+    switch (cp->state)
     {
         case cp_state_noinpt:
-            pwm_set_duty_cycle(&my_pwm, 0, 0);
+            duty_cycle = 0;
             break;
         case cp_state_valmod:
-            pwm_set_duty_cycle(&my_pwm, 0, max_pct);
+            duty_cycle = max_pct;
             break;
         default:
-            displaymode_counter = (displaymode_counter + 1) % (2*max_pct);
-            pwm_set_duty_cycle(&my_pwm, 0, max_pct - abs(displaymode_counter - max_pct));
+            cp->dispmode_counter = (cp->dispmode_counter + 1) % (2*max_pct);
+            duty_cycle = max_pct - abs(cp->dispmode_counter - max_pct);
     }
 
-    app_timer_start(displaymode_timer, period, NULL);
+    pwm_set_duty_cycle(&my_pwm, pwm_channel_indicator, duty_cycle);
+    app_timer_start(dispmode_timer, period, ctx);
 }
 
 static void debounce_timer_handler(void *ctx)
 {
     /* rising */
-    if (my_btn_is_pressed(brd_btn_idx) && !btn_is_pressed)
+    if (button_read() && !button.pressed_flag)
     {
-        btn_is_pressed = true;
-        clicks_counter++;
-        app_timer_start(blinky_timer, APP_TIMER_TICKS(leds_upd_period_ms), NULL);
+        button.pressed_flag = true;
+        button.clicks_counter++;
+
+        app_timer_start(btnhold_timer,
+                        APP_TIMER_TICKS(btnhold_period_ms),
+                        (void *) &colorpicker);
     }
 
     /* falling */
-    if (!my_btn_is_pressed(brd_btn_idx) && btn_is_pressed)
+    if (!button_read() && button.pressed_flag)
     {
-        btn_is_pressed = false;
-        app_timer_start(dblclk_timer, APP_TIMER_TICKS(btn_dblclk_pause), NULL);
+        button.pressed_flag = false;
+
+        app_timer_start(dblclk_timer,
+                        APP_TIMER_TICKS(btn_dblclk_pause),
+                        NULL);
     }
 }
 
-void btn_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+void gpiote_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
-    app_timer_start(debounce_timer, APP_TIMER_TICKS(debounce_period_ms), NULL);
+    app_timer_start(debounce_timer,
+                    APP_TIMER_TICKS(debounce_period_ms),
+                    NULL);
 }
 
 void logs_init()
@@ -272,8 +352,18 @@ void logs_init()
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
-static nrfx_gpiote_in_config_t
-gpiote_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
+static void gpiote_init_on_toggle(nrfx_gpiote_pin_t pin,
+                                  nrf_gpio_pin_pull_t pull,
+                                  nrfx_gpiote_evt_handler_t handler)
+{
+    nrfx_gpiote_in_config_t
+    gpiote_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(false);
+
+    gpiote_config.pull = pull;
+
+    nrfx_gpiote_in_init(pin, &gpiote_config, handler);
+    nrfx_gpiote_in_event_enable(pin, true);
+}
 
 int main(void)
 {
@@ -284,10 +374,6 @@ int main(void)
     pwm_run(&my_pwm);
 
     nrfx_gpiote_init();
-
-    gpiote_config.pull = NRF_GPIO_PIN_PULLUP;
-    nrfx_gpiote_in_init(my_btn_mappings[brd_btn_idx], &gpiote_config, btn_handler);
-    nrfx_gpiote_in_event_enable(my_btn_mappings[brd_btn_idx], true);
 
     logs_init();
     NRF_LOG_INFO("Starting up the test project with USB logging");
@@ -302,16 +388,23 @@ int main(void)
                      APP_TIMER_MODE_SINGLE_SHOT,
                      dblclk_timer_handler);
 
-    app_timer_create(&blinky_timer,
+    app_timer_create(&btnhold_timer,
                      APP_TIMER_MODE_SINGLE_SHOT,
-                     blinky_timer_handler);
+                     btnhold_timer_handler);
 
-    app_timer_create(&displaymode_timer,
+    app_timer_create(&dispmode_timer,
                      APP_TIMER_MODE_SINGLE_SHOT,
-                     displaymode_timer_handler);
-    app_timer_start(displaymode_timer, APP_TIMER_TICKS(displaymode_fast_ms), NULL);
+                     dispmode_timer_handler);
 
-    colorpicker_update_led(hsv_color);
+    gpiote_init_on_toggle(my_btn_mappings[brd_btn_idx],
+                          NRF_GPIO_PIN_PULLUP,
+                          gpiote_handler);
+
+    app_timer_start(dispmode_timer,
+                    APP_TIMER_TICKS(dispmode_fast_ms),
+                    (void *) &colorpicker);
+
+    colorpicker_show((colorpicker_t *) &colorpicker);
 
     while (true)
     {
