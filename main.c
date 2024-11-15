@@ -4,8 +4,10 @@
 
 #include "nrf_drv_clock.h"
 #include "app_timer.h"
+
 #include "nrfx_pwm.h"
 #include "nrfx_gpiote.h"
+#include "nrfx_nvmc.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -16,10 +18,15 @@
 #include "app_usbd.h"
 #include "app_usbd_serial_num.h"
 
+#include "nrf_bootloader_info.h"
+#include "nrf_dfu_types.h"
+
 #include "lib/my_board.h"
 #include "lib/colorspaces.h"
 #include "lib/button.h"
 #include "lib/colorpicker.h"
+
+#include "nrf_delay.h"
 
 APP_TIMER_DEF(dispmode_timer);
 APP_TIMER_DEF(debounce_timer);
@@ -50,6 +57,12 @@ static const uint8_t device_id[] =  {6, 5, 8, 2};
 
 static const uint16_t
 default_hue = ((device_id[2]*10 + device_id[3]) * max_hue) / max_pct;
+
+static const hsv_t default_color_hsv = {
+    default_hue,
+    max_saturation,
+    max_brightness
+};
 
 static volatile colorpicker_t cpicker;
 static volatile button_t button;
@@ -231,14 +244,20 @@ static void create_timers(void)
                      dispmode_timer_handler);
 }
 
+static void foo(void);
+
 static void button_onclick(uint8_t clicks)
 {
     NRF_LOG_INFO("Clicks - %d", clicks);
 
     if (clicks != 2)
+    {
         return;
+    }
 
     colorpicker_next_state((colorpicker_t *) &cpicker);
+
+    foo();
 
     NRF_LOG_INFO("%s mode is in progress",
                  cpicker_modenames[colorpicker_get_state((colorpicker_t *) &cpicker)]);
@@ -298,6 +317,112 @@ static button_callbacks_t const button_callbacks = {
     .schedule_debounce_check = button_schedule_debounce_check
 };
 
+typedef struct {
+    hsv_t color;
+    int16_t sat_cnt;
+    int16_t val_cnt;
+} colorpicker_save_t;
+
+STATIC_ASSERT(sizeof(colorpicker_save_t) == 8, "Bad size!");
+
+static const colorpicker_save_t colorpicker_default_save = {
+    default_color_hsv, 0, 0
+};
+
+static bool colorpicker_save_valid(colorpicker_save_t *s)
+{
+    return (s->color.h >= 0 && s->color.h <= max_hue) &&
+           (s->color.s >= 0 && s->color.s <= max_saturation) &&
+           (s->color.v >= 0 && s->color.v <= max_brightness) &&
+	   (s->sat_cnt >= 0 && s->sat_cnt <= 2*max_saturation) &&
+	   (s->val_cnt >= 0 && s->val_cnt <= 2*max_brightness);
+}
+
+enum { colorpicker_storage_capacity_elems = 16 };
+enum { colorpicker_storage_size = colorpicker_storage_capacity_elems * sizeof(colorpicker_save_t) };
+
+STATIC_ASSERT(colorpicker_storage_size < CODE_PAGE_SIZE, "Large storage!");
+
+static const colorpicker_save_t *colorpicker_storage_top =
+(colorpicker_save_t *) (BOOTLOADER_START_ADDR - NRF_DFU_APP_DATA_AREA_SIZE);
+
+static colorpicker_save_t *colorpicker_storage_read(void)
+{
+    uint32_t idx;
+    colorpicker_save_t *ptr = (colorpicker_save_t *) colorpicker_storage_top;
+    
+    for (idx = 0; idx < colorpicker_storage_capacity_elems; idx++)
+    {
+       if (colorpicker_save_valid(ptr + idx))
+       {
+            return ptr + idx;
+       }
+    }
+
+    return NULL;
+}
+
+static uint8_t page_tmp_storage[CODE_PAGE_SIZE];
+
+static void colorpicker_storage_write(colorpicker_save_t const *s)
+{
+    uint32_t idx;
+    colorpicker_save_t *ptr = (colorpicker_save_t *) colorpicker_storage_top;
+    static const uint32_t empty[] = { 0xFFFFFFFF, 0xFFFFFFFF };
+
+    /* find vacant place in storage */
+    for (idx = 0; idx < colorpicker_storage_capacity_elems; idx++)
+    {
+       if (0 == memcmp(ptr + idx, empty, sizeof(colorpicker_save_t)))
+       {
+            nrfx_nvmc_bytes_write((uint32_t) (ptr + idx), s, CODE_PAGE_SIZE);
+
+            while (!nrfx_nvmc_write_done_check())
+            {}
+
+            return;
+       }
+    }
+
+    /* unable to find empty place, erase page */
+    memset(page_tmp_storage, 0xFF, sizeof(page_tmp_storage));
+    memcpy(page_tmp_storage + colorpicker_storage_size,
+           colorpicker_storage_top + colorpicker_storage_size,
+           CODE_PAGE_SIZE - colorpicker_storage_size);
+    
+    nrfx_nvmc_page_erase((uint32_t) colorpicker_storage_top);
+    nrfx_nvmc_bytes_write((uint32_t) colorpicker_storage_top,
+                          (void const *) page_tmp_storage,
+                          CODE_PAGE_SIZE);
+    
+    while (!nrfx_nvmc_write_done_check())
+    {}
+
+    colorpicker_storage_write(s);
+}
+
+static void colorpicker_dump(colorpicker_t const *c, colorpicker_save_t *s)
+{
+    s->color = c->color;
+    s->sat_cnt = c->sat_cnt;
+    s->val_cnt = c->val_cnt;
+}
+
+static void colorpicker_load(colorpicker_t *c, colorpicker_save_t const *s)
+{
+    c->color = s->color;
+    c->sat_cnt = s->sat_cnt;
+    c->val_cnt = s->val_cnt;
+}
+
+static void foo(void)
+{
+    colorpicker_save_t save;
+
+    colorpicker_dump((colorpicker_t *) &cpicker, &save);
+    colorpicker_storage_write(&save);
+}
+
 int main(void)
 {
     static uint8_t channels[NRF_PWM_CHANNEL_COUNT] = {
@@ -320,8 +445,18 @@ int main(void)
     create_timers();
 
     colorpicker_init((colorpicker_t *) &cpicker,
-                     hsv(default_hue, max_saturation, max_brightness),
+                     default_color_hsv,
 		     max_pct);
+    do {
+        colorpicker_save_t *save = colorpicker_storage_read();
+	if (save == NULL)
+	{
+            save = (colorpicker_save_t *) &colorpicker_default_save;
+	}
+
+	colorpicker_load((colorpicker_t *) &cpicker, save);
+    } while (0);
+
     colorpicker_show_color_hsv((colorpicker_t *) &cpicker);
 
     button_init((button_t *) &button,

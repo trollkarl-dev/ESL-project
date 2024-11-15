@@ -45,6 +45,11 @@
 #endif
 // <h> nRF_Core 
 
+
+#ifndef NRFX_NVMC_ENABLED
+#define NRFX_NVMC_ENABLED 1
+#endif
+
 //==========================================================
 // <e> NRF_MPU_LIB_ENABLED - nrf_mpu_lib - Module for MPU
 //==========================================================
