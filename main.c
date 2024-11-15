@@ -85,24 +85,31 @@ static pwm_wrapper_t my_pwm =
     .seq = &my_pwm_seq
 };
 
-static bool pwm_init(pwm_wrapper_t *pwm)
+static bool pwm_init(pwm_wrapper_t *pwm,
+                     uint8_t const *channels,
+		     uint16_t pwm_top_value,
+		     bool invert)
 {
-    static nrfx_pwm_config_t const my_pwm_config =
+    int i;
+
+    nrfx_pwm_config_t my_pwm_config =
     {
-        .output_pins =
-        {
-            my_led_mappings[pwm_channel_indicator] | NRFX_PWM_PIN_INVERTED,
-            my_led_mappings[pwm_channel_red]       | NRFX_PWM_PIN_INVERTED,
-            my_led_mappings[pwm_channel_green]     | NRFX_PWM_PIN_INVERTED,
-            my_led_mappings[pwm_channel_blue]      | NRFX_PWM_PIN_INVERTED,
-        },
         .irq_priority = APP_IRQ_PRIORITY_LOWEST,
         .base_clock   = NRF_PWM_CLK_1MHz,
         .count_mode   = NRF_PWM_MODE_UP,
-        .top_value    = max_pct,
+        .top_value    = pwm_top_value,
         .load_mode    = NRF_PWM_LOAD_INDIVIDUAL,
         .step_mode    = NRF_PWM_STEP_AUTO,
     };
+
+    for (i = 0; i < NRF_PWM_CHANNEL_COUNT; i++)
+    {
+        my_pwm_config.output_pins[i] = channels[i];
+        if (invert)
+        {
+            my_pwm_config.output_pins[i] |= NRFX_PWM_PIN_INVERTED;
+        }
+    }
 
     return (nrfx_pwm_init(pwm->pwm,
                           &my_pwm_config,
@@ -293,10 +300,17 @@ static button_callbacks_t const button_callbacks = {
 
 int main(void)
 {
+    static uint8_t channels[NRF_PWM_CHANNEL_COUNT] = {
+        my_led_mappings[pwm_channel_indicator],
+        my_led_mappings[pwm_channel_red],
+        my_led_mappings[pwm_channel_green],
+        my_led_mappings[pwm_channel_blue],
+    };
+
     nrf_drv_clock_init();
     nrf_drv_clock_lfclk_request(NULL);
 
-    pwm_init(&my_pwm);
+    pwm_init(&my_pwm, channels, max_pct, true);
     pwm_run(&my_pwm);
 
     logs_init();
