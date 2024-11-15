@@ -265,7 +265,7 @@ static void debounce_timer_handler(void *ctx)
 
 static void gpiote_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
-    button.callbacks.schedule_debounce_check(button.timings.debounce_period_ms);
+    button_first_run((button_t *) &button);
 }
 
 static void logs_init()

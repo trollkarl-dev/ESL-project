@@ -40,6 +40,7 @@ void button_init(button_t *b,
 void button_click_check(button_t *b);
 void button_hold_check(button_t *b);
 void button_debounce_check(button_t *b);
+void button_first_run(button_t *b);
 
 #ifdef __cplusplus
 }

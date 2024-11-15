@@ -24,6 +24,16 @@ typedef struct {
     uint8_t b;
 } rgb_t;
 
+inline rgb_t rgb(uint8_t r, uint8_t g, uint8_t b)
+{
+    return (rgb_t) {r, g, b};
+}
+
+inline rgb_t rgb_float(float r, float g, float b)
+{
+    return rgb((uint8_t) r, (uint8_t) g, (uint8_t) b);
+}
+
 rgb_t hsv2rgb(hsv_t hsv);
 
 #ifdef __cplusplus

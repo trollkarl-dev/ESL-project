@@ -47,3 +47,9 @@ void button_debounce_check(button_t *b)
         b->callbacks.schedule_click_check(b->timings.dblclk_pause_ms);
     }
 }
+
+void button_first_run(button_t *b)
+{
+    b->callbacks.schedule_debounce_check(b->timings.debounce_period_ms);
+}
+
