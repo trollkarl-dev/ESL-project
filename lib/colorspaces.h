@@ -8,9 +8,8 @@ extern "C" {
 #include <stdint.h>
 
 enum { max_hue = 360 };
-enum { max_pct = 100 };
-enum { max_saturation = max_pct };
-enum { max_brightness = max_pct };
+enum { max_saturation = 100 };
+enum { max_brightness = 100 };
 
 typedef struct {
     uint16_t h;
@@ -23,6 +22,11 @@ typedef struct {
     uint8_t g;
     uint8_t b;
 } rgb_t;
+
+inline hsv_t hsv(uint16_t h, uint8_t s, uint8_t v)
+{
+    return (hsv_t) {h, s, v};
+}
 
 inline rgb_t rgb(uint8_t r, uint8_t g, uint8_t b)
 {

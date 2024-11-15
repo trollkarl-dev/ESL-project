@@ -64,6 +64,7 @@ SRC_FILES += \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/lib/my_board.c \
   $(PROJ_DIR)/lib/colorspaces.c \
+  $(PROJ_DIR)/lib/colorpicker.c \
   $(PROJ_DIR)/lib/button.c \
   $(PROJ_DIR)/main.c \
 

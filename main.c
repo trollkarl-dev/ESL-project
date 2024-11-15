@@ -19,11 +19,14 @@
 #include "lib/my_board.h"
 #include "lib/colorspaces.h"
 #include "lib/button.h"
+#include "lib/colorpicker.h"
 
 APP_TIMER_DEF(dispmode_timer);
 APP_TIMER_DEF(debounce_timer);
 APP_TIMER_DEF(btnhold_timer);
 APP_TIMER_DEF(btnclk_timer);
+
+enum { max_pct = 100 };
 
 enum { brd_btn_idx = 0 };
 enum { btn_dblclk_pause = 200 };
@@ -48,38 +51,8 @@ static const uint8_t device_id[] =  {6, 5, 8, 2};
 static const uint16_t
 default_hue = ((device_id[2]*10 + device_id[3]) * max_hue) / max_pct;
 
-typedef enum {
-    cp_state_noinpt = 0,
-    cp_state_huemod,
-    cp_state_satmod,
-    cp_state_valmod
-} colorpicker_state_t;
-
-typedef struct {
-    colorpicker_state_t state;
-    int16_t sat_cnt;
-    int16_t val_cnt;
-    int16_t dispmode_cnt;
-    hsv_t color;
-} colorpicker_t;
-
-static void colorpicker_init(colorpicker_t *c, hsv_t initial_color)
-{
-    c->state = cp_state_noinpt;
-    c->sat_cnt = 0;
-    c->val_cnt = 0;
-    c->dispmode_cnt = 0;
-    c->color = initial_color;
-}
-
 static volatile colorpicker_t cpicker;
-
 static volatile button_t button;
-
-static bool button_is_pressed(void)
-{
-    return my_btn_is_pressed(brd_btn_idx);
-}
 
 static const char *cpicker_modenames[] =
 {
@@ -88,27 +61,6 @@ static const char *cpicker_modenames[] =
     "Saturation Modification",
     "Brightness Modification"
 };
-
-static void button_onclick(uint8_t clicks)
-{
-    NRF_LOG_INFO("Clicks - %d", clicks);
-
-    if (clicks != 2)
-        return;
-
-    if (cpicker.state >= cp_state_valmod)
-        cpicker.state = cp_state_noinpt;
-    else
-        cpicker.state++;
-
-    NRF_LOG_INFO("%s mode is in progress",
-                 cpicker_modenames[cpicker.state]);
-
-    cpicker.dispmode_cnt = 0;
-    app_timer_start(dispmode_timer,
-                    APP_TIMER_TICKS(dispmode_fast_ms),
-                    (void *) &cpicker);
-}
 
 static nrfx_pwm_t my_pwm_instance = NRFX_PWM_INSTANCE(0);
 static nrf_pwm_values_individual_t my_pwm_seq_values;
@@ -196,29 +148,6 @@ static void colorpicker_show_color_hsv(colorpicker_t *c)
                  rgb.r, rgb.g, rgb.b);
 }
 
-static void button_onhold(void)
-{
-    switch (cpicker.state)
-    {
-        case cp_state_huemod:
-            cpicker.color.h = (cpicker.color.h + 1) % max_hue;
-            break;
-        case cp_state_satmod:
-            cpicker.sat_cnt = ((cpicker.sat_cnt+1) % (2*max_saturation));
-            cpicker.color.s = abs(cpicker.sat_cnt - max_saturation);
-            break;
-        case cp_state_valmod:
-            cpicker.val_cnt = ((cpicker.val_cnt+1) % (2*max_brightness));
-            cpicker.color.v = abs(cpicker.val_cnt - max_brightness);
-            break;
-	case cp_state_noinpt:
-	    break;
-    }
-
-    if (cpicker.state != cp_state_noinpt)
-        colorpicker_show_color_hsv((colorpicker_t *) &cpicker);
-}
-
 static void btnhold_timer_handler(void *ctx)
 {
     button_hold_check((button_t *) &button);
@@ -231,31 +160,19 @@ static void btnclk_timer_handler(void *ctx)
 
 static void dispmode_timer_handler(void *ctx)
 {
-    uint32_t period = APP_TIMER_TICKS(dispmode_slow_ms);
-    uint8_t duty_cycle = 0;
+    colorpicker_dispmode_data_t data = {0};
+    colorpicker_update_dispmode_data((colorpicker_t *) &cpicker, &data);
 
-    switch (cpicker.state)
-    {
-        case cp_state_noinpt:
-            duty_cycle = 0;
-            break;
-        case cp_state_valmod:
-            duty_cycle = max_pct;
-            break;
-        case cp_state_satmod:
-            period = APP_TIMER_TICKS(dispmode_fast_ms);
-            cpicker.dispmode_cnt = (cpicker.dispmode_cnt + 1) % (2*max_pct);
-            duty_cycle = max_pct - abs(cpicker.dispmode_cnt - max_pct);
-            app_timer_start(dispmode_timer, period, NULL);
-	    break;
-        case cp_state_huemod:
-            period = APP_TIMER_TICKS(dispmode_slow_ms);
-            cpicker.dispmode_cnt = (cpicker.dispmode_cnt + 1) % (2*max_pct);
-            duty_cycle = max_pct - abs(cpicker.dispmode_cnt - max_pct);
-            app_timer_start(dispmode_timer, period, NULL);
-    }
+    pwm_set_duty_cycle(&my_pwm, pwm_channel_indicator, data.duty_cycle);
 
-    pwm_set_duty_cycle(&my_pwm, pwm_channel_indicator, duty_cycle);
+    if (data.state == cp_state_huemod)
+        app_timer_start(dispmode_timer,
+	                APP_TIMER_TICKS(dispmode_slow_ms),
+			NULL);
+    if (data.state == cp_state_satmod)
+        app_timer_start(dispmode_timer,
+	                APP_TIMER_TICKS(dispmode_fast_ms),
+			NULL);
 }
 
 static void debounce_timer_handler(void *ctx)
@@ -305,6 +222,36 @@ static void create_timers(void)
     app_timer_create(&dispmode_timer,
                      APP_TIMER_MODE_SINGLE_SHOT,
                      dispmode_timer_handler);
+}
+
+static void button_onclick(uint8_t clicks)
+{
+    NRF_LOG_INFO("Clicks - %d", clicks);
+
+    if (clicks != 2)
+        return;
+
+    colorpicker_next_state((colorpicker_t *) &cpicker);
+
+    NRF_LOG_INFO("%s mode is in progress",
+                 cpicker_modenames[colorpicker_get_state((colorpicker_t *) &cpicker)]);
+
+    app_timer_start(dispmode_timer,
+                    APP_TIMER_TICKS(dispmode_fast_ms),
+                    NULL);
+}
+
+static void button_onhold(void)
+{
+    colorpicker_next_color((colorpicker_t *) &cpicker);
+
+    if (colorpicker_get_state((colorpicker_t *) &cpicker) != cp_state_noinpt)
+        colorpicker_show_color_hsv((colorpicker_t *) &cpicker);
+}
+
+static bool button_is_pressed(void)
+{
+    return my_btn_is_pressed(brd_btn_idx);
 }
 
 static void button_schedule_click_check(uint32_t delay_ms)
@@ -359,7 +306,8 @@ int main(void)
     create_timers();
 
     colorpicker_init((colorpicker_t *) &cpicker,
-                     (hsv_t) {default_hue, max_saturation, max_brightness});
+                     hsv(default_hue, max_saturation, max_brightness),
+		     max_pct);
     colorpicker_show_color_hsv((colorpicker_t *) &cpicker);
 
     button_init((button_t *) &button,

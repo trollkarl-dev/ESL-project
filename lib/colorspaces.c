@@ -6,9 +6,9 @@ rgb_t hsv2rgb(hsv_t hsv)
     const int sector = (hsv.h / sixth_hue) % 6;
 
     float vmin = (float) hsv.v *
-                 (float) (max_pct - hsv.s) /
-		 (float) max_pct;
-    float a = ((float)hsv.v - vmin) *
+                 (float) (max_saturation - hsv.s) /
+		 (float) max_brightness;
+    float a = ((float) hsv.v - vmin) *
               (float) (hsv.h % sixth_hue) /
 	      (float) sixth_hue;
     float vinc = vmin + a;
