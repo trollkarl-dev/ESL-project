@@ -75,3 +75,25 @@ void colorpicker_update_dispmode_data(colorpicker_t *c,
     }
 }
 
+bool colorpicker_save_valid(colorpicker_save_t *s)
+{
+    return (s->color.h >= 0 && s->color.h <= max_hue) &&
+           (s->color.s >= 0 && s->color.s <= max_saturation) &&
+           (s->color.v >= 0 && s->color.v <= max_brightness) &&
+	   (s->sat_cnt >= 0 && s->sat_cnt <= 2*max_saturation) &&
+	   (s->val_cnt >= 0 && s->val_cnt <= 2*max_brightness);
+}
+
+void colorpicker_dump(colorpicker_t const *c, colorpicker_save_t *s)
+{
+    s->color = c->color;
+    s->sat_cnt = c->sat_cnt;
+    s->val_cnt = c->val_cnt;
+}
+
+void colorpicker_load(colorpicker_t *c, colorpicker_save_t const *s)
+{
+    c->color = s->color;
+    c->sat_cnt = s->sat_cnt;
+    c->val_cnt = s->val_cnt;
+}

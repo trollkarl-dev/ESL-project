@@ -256,8 +256,10 @@ static void button_onclick(uint8_t clicks)
     }
 
     colorpicker_next_state((colorpicker_t *) &cpicker);
-
-    foo();
+    if (colorpicker_get_state((colorpicker_t *) &cpicker) == cp_state_noinpt)
+    {
+        foo();
+    }
 
     NRF_LOG_INFO("%s mode is in progress",
                  cpicker_modenames[colorpicker_get_state((colorpicker_t *) &cpicker)]);
@@ -282,23 +284,17 @@ static bool button_is_pressed(void)
 
 static void button_schedule_click_check(uint32_t delay_ms)
 {
-    app_timer_start(btnclk_timer,
-                    APP_TIMER_TICKS(delay_ms),
-                    NULL);
+    app_timer_start(btnclk_timer, APP_TIMER_TICKS(delay_ms), NULL);
 }
 
 static void button_schedule_hold_check(uint32_t delay_ms)
 {
-    app_timer_start(btnhold_timer,
-                    APP_TIMER_TICKS(delay_ms),
-                    NULL);
+    app_timer_start(btnhold_timer, APP_TIMER_TICKS(delay_ms), NULL);
 }
 
 static void button_schedule_debounce_check(uint32_t delay_ms)
 {
-    app_timer_start(debounce_timer,
-                    APP_TIMER_TICKS(delay_ms),
-                    NULL);
+    app_timer_start(debounce_timer, APP_TIMER_TICKS(delay_ms), NULL);
 }
 
 static button_timings_t const button_timings = {
@@ -317,65 +313,56 @@ static button_callbacks_t const button_callbacks = {
     .schedule_debounce_check = button_schedule_debounce_check
 };
 
-typedef struct {
-    hsv_t color;
-    int16_t sat_cnt;
-    int16_t val_cnt;
-} colorpicker_save_t;
-
-STATIC_ASSERT(sizeof(colorpicker_save_t) == 8, "Bad size!");
-
 static const colorpicker_save_t colorpicker_default_save = {
     default_color_hsv, 0, 0
 };
 
-static bool colorpicker_save_valid(colorpicker_save_t *s)
-{
-    return (s->color.h >= 0 && s->color.h <= max_hue) &&
-           (s->color.s >= 0 && s->color.s <= max_saturation) &&
-           (s->color.v >= 0 && s->color.v <= max_brightness) &&
-	   (s->sat_cnt >= 0 && s->sat_cnt <= 2*max_saturation) &&
-	   (s->val_cnt >= 0 && s->val_cnt <= 2*max_brightness);
-}
-
-enum { colorpicker_storage_capacity_elems = 16 };
+enum { colorpicker_storage_capacity_elems = 4 };
 enum { colorpicker_storage_size = colorpicker_storage_capacity_elems * sizeof(colorpicker_save_t) };
 
-STATIC_ASSERT(colorpicker_storage_size < CODE_PAGE_SIZE, "Large storage!");
+STATIC_ASSERT(colorpicker_storage_size <= CODE_PAGE_SIZE, "Too large storage!");
 
-static const colorpicker_save_t *colorpicker_storage_top =
-(colorpicker_save_t *) (BOOTLOADER_START_ADDR - NRF_DFU_APP_DATA_AREA_SIZE);
+static uint8_t *colorpicker_storage_top =
+(uint8_t *) (BOOTLOADER_START_ADDR - NRF_DFU_APP_DATA_AREA_SIZE);
 
 static colorpicker_save_t *colorpicker_storage_read(void)
 {
     uint32_t idx;
+    int32_t valid_idx = -1;
+
     colorpicker_save_t *ptr = (colorpicker_save_t *) colorpicker_storage_top;
     
     for (idx = 0; idx < colorpicker_storage_capacity_elems; idx++)
     {
        if (colorpicker_save_valid(ptr + idx))
        {
-            return ptr + idx;
+            valid_idx = idx;
+       }
+       else
+       {
+            break;
        }
     }
 
-    return NULL;
+    return (valid_idx != -1) ? (ptr + valid_idx) : NULL;
 }
 
-static uint8_t page_tmp_storage[CODE_PAGE_SIZE];
+static uint8_t page_tmp_storage[CODE_PAGE_SIZE - colorpicker_storage_size];
 
 static void colorpicker_storage_write(colorpicker_save_t const *s)
 {
     uint32_t idx;
     colorpicker_save_t *ptr = (colorpicker_save_t *) colorpicker_storage_top;
+    
     static const uint32_t empty[] = { 0xFFFFFFFF, 0xFFFFFFFF };
+    STATIC_ASSERT(sizeof(empty) == sizeof(colorpicker_save_t));
 
-    /* find vacant place in storage */
+    /* find vacant place for save in storage */
     for (idx = 0; idx < colorpicker_storage_capacity_elems; idx++)
     {
        if (0 == memcmp(ptr + idx, empty, sizeof(colorpicker_save_t)))
        {
-            nrfx_nvmc_bytes_write((uint32_t) (ptr + idx), s, CODE_PAGE_SIZE);
+            nrfx_nvmc_bytes_write((uint32_t) (ptr + idx), s, sizeof(colorpicker_save_t));
 
             while (!nrfx_nvmc_write_done_check())
             {}
@@ -384,35 +371,22 @@ static void colorpicker_storage_write(colorpicker_save_t const *s)
        }
     }
 
-    /* unable to find empty place, erase page */
-    memset(page_tmp_storage, 0xFF, sizeof(page_tmp_storage));
-    memcpy(page_tmp_storage + colorpicker_storage_size,
+    NRF_LOG_INFO("Page Erase");
+    
+    /* unable to find empty space, erase page */
+    memcpy(page_tmp_storage,
            colorpicker_storage_top + colorpicker_storage_size,
-           CODE_PAGE_SIZE - colorpicker_storage_size);
+           sizeof(page_tmp_storage));
     
     nrfx_nvmc_page_erase((uint32_t) colorpicker_storage_top);
-    nrfx_nvmc_bytes_write((uint32_t) colorpicker_storage_top,
+    nrfx_nvmc_bytes_write((uint32_t) (colorpicker_storage_top + colorpicker_storage_size),
                           (void const *) page_tmp_storage,
-                          CODE_PAGE_SIZE);
+                          sizeof(page_tmp_storage));
     
     while (!nrfx_nvmc_write_done_check())
     {}
 
     colorpicker_storage_write(s);
-}
-
-static void colorpicker_dump(colorpicker_t const *c, colorpicker_save_t *s)
-{
-    s->color = c->color;
-    s->sat_cnt = c->sat_cnt;
-    s->val_cnt = c->val_cnt;
-}
-
-static void colorpicker_load(colorpicker_t *c, colorpicker_save_t const *s)
-{
-    c->color = s->color;
-    c->sat_cnt = s->sat_cnt;
-    c->val_cnt = s->val_cnt;
 }
 
 static void foo(void)
