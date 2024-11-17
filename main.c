@@ -99,8 +99,8 @@ static pwm_wrapper_t my_pwm =
 
 static bool pwm_init(pwm_wrapper_t *pwm,
                      uint8_t const *channels,
-		     uint16_t pwm_top_value,
-		     bool invert)
+                     uint16_t pwm_top_value,
+                     bool invert)
 {
     int i;
 
@@ -186,12 +186,13 @@ static void dispmode_timer_handler(void *ctx)
 
     if (data.state == cp_state_huemod)
         app_timer_start(dispmode_timer,
-	                APP_TIMER_TICKS(dispmode_slow_ms),
-			NULL);
+                        APP_TIMER_TICKS(dispmode_slow_ms),
+                        NULL);
+
     if (data.state == cp_state_satmod)
         app_timer_start(dispmode_timer,
-	                APP_TIMER_TICKS(dispmode_fast_ms),
-			NULL);
+                        APP_TIMER_TICKS(dispmode_fast_ms),
+                        NULL);
 }
 
 static void debounce_timer_handler(void *ctx)

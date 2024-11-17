@@ -2,7 +2,7 @@
 
 void button_init(button_t *b,
                  button_timings_t const * timings,
-		 button_callbacks_t const * callbacks)
+                 button_callbacks_t const * callbacks)
 {
     b->pressed_flag = false;
     b->clicks_cnt = 0;

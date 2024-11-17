@@ -7,10 +7,12 @@ rgb_t hsv2rgb(hsv_t hsv)
 
     float vmin = (float) hsv.v *
                  (float) (max_saturation - hsv.s) /
-		 (float) max_brightness;
+                 (float) max_brightness;
+
     float a = ((float) hsv.v - vmin) *
               (float) (hsv.h % sixth_hue) /
-	      (float) sixth_hue;
+              (float) sixth_hue;
+
     float vinc = vmin + a;
     float vdec = hsv.v - a;
 

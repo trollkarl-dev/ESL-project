@@ -35,7 +35,7 @@ typedef struct {
 
 void button_init(button_t *b,
                  button_timings_t const * timings,
-		 button_callbacks_t const * callbacks);
+                 button_callbacks_t const * callbacks);
 
 void button_click_check(button_t *b);
 void button_hold_check(button_t *b);

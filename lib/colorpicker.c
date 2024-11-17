@@ -4,7 +4,7 @@
 
 void colorpicker_init(colorpicker_t *c,
                       hsv_t initial_color,
-		      int16_t max_dispmode_duty_cycle)
+                      int16_t max_dispmode_duty_cycle)
 {
     c->state = cp_state_noinpt;
     c->sat_cnt = 0;
@@ -49,8 +49,8 @@ void colorpicker_next_color(colorpicker_t *c)
             c->val_cnt = ((c->val_cnt+1) % (2*max_brightness));
             c->color.v = abs(c->val_cnt - max_brightness);
             break;
-	case cp_state_noinpt:
-	    break;
+        case cp_state_noinpt:
+            break;
     }
 }
 
