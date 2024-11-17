@@ -25,8 +25,7 @@
 #include "lib/colorspaces.h"
 #include "lib/button.h"
 #include "lib/colorpicker.h"
-
-#include "nrf_delay.h"
+#include "lib/flash_storage.h"
 
 APP_TIMER_DEF(dispmode_timer);
 APP_TIMER_DEF(debounce_timer);
@@ -244,7 +243,7 @@ static void create_timers(void)
                      dispmode_timer_handler);
 }
 
-static void foo(void);
+static void save_state();
 
 static void button_onclick(uint8_t clicks)
 {
@@ -256,9 +255,10 @@ static void button_onclick(uint8_t clicks)
     }
 
     colorpicker_next_state((colorpicker_t *) &cpicker);
+
     if (colorpicker_get_state((colorpicker_t *) &cpicker) == cp_state_noinpt)
     {
-        foo();
+        save_state();
     }
 
     NRF_LOG_INFO("%s mode is in progress",
@@ -313,92 +313,44 @@ static button_callbacks_t const button_callbacks = {
     .schedule_debounce_check = button_schedule_debounce_check
 };
 
-static const colorpicker_save_t colorpicker_default_save = {
-    default_color_hsv, 0, 0
+void flash_storage_page_erase(uint32_t address)
+{
+    nrfx_nvmc_page_erase(address);
+}
+
+void flash_storage_write_bytes(uint32_t address,
+                               void const *bytes,
+                               uint32_t num)
+{
+    nrfx_nvmc_bytes_write(address, bytes, num);
+}
+
+bool flash_storage_write_done_check(void)
+{
+    return nrfx_nvmc_write_done_check();
+}
+
+static colorpicker_save_t default_save = {
+    .color = default_color_hsv,
+    .sat_cnt = 0,
+    .val_cnt = 0
 };
 
-enum { colorpicker_storage_capacity_elems = 4 };
-enum { colorpicker_storage_size = colorpicker_storage_capacity_elems * sizeof(colorpicker_save_t) };
+static volatile flash_storage_t colorpicker_storage;
+enum { colorpicker_storage_size = 4 };
 
-STATIC_ASSERT(colorpicker_storage_size <= CODE_PAGE_SIZE, "Too large storage!");
-
-static uint8_t *colorpicker_storage_top =
-(uint8_t *) (BOOTLOADER_START_ADDR - NRF_DFU_APP_DATA_AREA_SIZE);
-
-static colorpicker_save_t *colorpicker_storage_read(void)
-{
-    uint32_t idx;
-    int32_t valid_idx = -1;
-
-    colorpicker_save_t *ptr = (colorpicker_save_t *) colorpicker_storage_top;
-    
-    for (idx = 0; idx < colorpicker_storage_capacity_elems; idx++)
-    {
-       if (colorpicker_save_valid(ptr + idx))
-       {
-            valid_idx = idx;
-       }
-       else
-       {
-            break;
-       }
-    }
-
-    return (valid_idx != -1) ? (ptr + valid_idx) : NULL;
-}
-
-static uint8_t page_tmp_storage[CODE_PAGE_SIZE - colorpicker_storage_size];
-
-static void colorpicker_storage_write(colorpicker_save_t const *s)
-{
-    uint32_t idx;
-    colorpicker_save_t *ptr = (colorpicker_save_t *) colorpicker_storage_top;
-    
-    static const uint32_t empty[] = { 0xFFFFFFFF, 0xFFFFFFFF };
-    STATIC_ASSERT(sizeof(empty) == sizeof(colorpicker_save_t));
-
-    /* find vacant place for save in storage */
-    for (idx = 0; idx < colorpicker_storage_capacity_elems; idx++)
-    {
-       if (0 == memcmp(ptr + idx, empty, sizeof(colorpicker_save_t)))
-       {
-            nrfx_nvmc_bytes_write((uint32_t) (ptr + idx), s, sizeof(colorpicker_save_t));
-
-            while (!nrfx_nvmc_write_done_check())
-            {}
-
-            return;
-       }
-    }
-
-    NRF_LOG_INFO("Page Erase");
-    
-    /* unable to find empty space, erase page */
-    memcpy(page_tmp_storage,
-           colorpicker_storage_top + colorpicker_storage_size,
-           sizeof(page_tmp_storage));
-    
-    nrfx_nvmc_page_erase((uint32_t) colorpicker_storage_top);
-    nrfx_nvmc_bytes_write((uint32_t) (colorpicker_storage_top + colorpicker_storage_size),
-                          (void const *) page_tmp_storage,
-                          sizeof(page_tmp_storage));
-    
-    while (!nrfx_nvmc_write_done_check())
-    {}
-
-    colorpicker_storage_write(s);
-}
-
-static void foo(void)
+static void save_state()
 {
     colorpicker_save_t save;
-
     colorpicker_dump((colorpicker_t *) &cpicker, &save);
-    colorpicker_storage_write(&save);
+    flash_storage_write((flash_storage_t *) &colorpicker_storage, &save);
 }
 
 int main(void)
 {
+    void *colorpicker_saved_state;
+    flash_storage_err_t err;
+
     static uint8_t channels[NRF_PWM_CHANNEL_COUNT] = {
         my_led_mappings[pwm_channel_indicator],
         my_led_mappings[pwm_channel_red],
@@ -420,22 +372,37 @@ int main(void)
 
     colorpicker_init((colorpicker_t *) &cpicker,
                      default_color_hsv,
-		     max_pct);
-    do {
-        colorpicker_save_t *save = colorpicker_storage_read();
-	if (save == NULL)
-	{
-            save = (colorpicker_save_t *) &colorpicker_default_save;
-	}
+                     max_pct);
 
-	colorpicker_load((colorpicker_t *) &cpicker, save);
-    } while (0);
+    err = flash_storage_init((flash_storage_t *) &colorpicker_storage,
+                             sizeof(colorpicker_save_t),
+                             colorpicker_storage_size,
+                             (void *) (BOOTLOADER_START_ADDR - NRF_DFU_APP_DATA_AREA_SIZE));
+
+    if (!((err == fs_err_success) || (err == fs_err_exist)))
+    {
+        while (true)
+        {
+
+        }
+    }
+
+    flash_storage_read_last((flash_storage_t *) &colorpicker_storage,
+                            &colorpicker_saved_state);
+    if (colorpicker_saved_state == NULL)
+    {
+        colorpicker_load((colorpicker_t *) &cpicker, &default_save);
+    }
+    else
+    {
+        colorpicker_load((colorpicker_t *) &cpicker, colorpicker_saved_state);
+    }
 
     colorpicker_show_color_hsv((colorpicker_t *) &cpicker);
 
     button_init((button_t *) &button,
                 &button_timings,
-		&button_callbacks);
+                &button_callbacks);
 
     nrfx_gpiote_init();
     gpiote_init_on_toggle(my_btn_mappings[brd_btn_idx],

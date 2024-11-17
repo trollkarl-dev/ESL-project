@@ -57,7 +57,6 @@ void colorpicker_update_dispmode_data(colorpicker_t *c,
 
 void colorpicker_dump(colorpicker_t const *c, colorpicker_save_t *s);
 void colorpicker_load(colorpicker_t *c, colorpicker_save_t const *s);
-bool colorpicker_save_valid(colorpicker_save_t *s);
 
 #ifdef __cplusplus
 }
