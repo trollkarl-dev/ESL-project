@@ -119,15 +119,23 @@ static bool flash_storage_item_is_empty(flash_storage_t *storage,
     return control_byte == 0xFF;
 }
 
+static void flash_storage_get_first_last_itemptr(flash_storage_t *storage,
+                                                 uint8_t **first_item,
+                                                 uint8_t **last_item)
+{
+    *first_item = (uint8_t *) storage->page_address +
+                  storage->page_offset +
+                  sizeof(header) +
+                  2 * sizeof(uint32_t);
+
+    *last_item = *first_item +
+                 storage->item_size * (storage->capacity_items - 1);
+}
+
 void flash_storage_read_last(flash_storage_t *storage, void **data)
 {
-    uint8_t *first_item = (uint8_t *) storage->page_address +
-                          storage->page_offset +
-                          sizeof(header) +
-                          2 * sizeof(uint32_t);
-
-    uint8_t *last_item = first_item +
-                         storage->item_size * (storage->capacity_items - 1);
+    uint8_t *first_item, *last_item;
+    flash_storage_get_first_last_itemptr(storage, &first_item, &last_item);
 
     if (!((storage->status == fs_err_success) ||
           (storage->status == fs_err_exist)))
@@ -150,13 +158,8 @@ void flash_storage_read_last(flash_storage_t *storage, void **data)
 
 bool flash_storage_write(flash_storage_t *storage, void *data)
 {
-    uint8_t *first_item = (uint8_t *) storage->page_address +
-                          storage->page_offset +
-                          sizeof(header) +
-                          2 * sizeof(uint32_t);
-
-    uint8_t *last_item = first_item +
-                         storage->item_size * (storage->capacity_items - 1);
+    uint8_t *first_item, *last_item;
+    flash_storage_get_first_last_itemptr(storage, &first_item, &last_item);
 
     if (!((storage->status == fs_err_success) ||
           (storage->status == fs_err_exist)))

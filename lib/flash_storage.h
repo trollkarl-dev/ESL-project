@@ -35,10 +35,10 @@ extern "C" {
 enum { flash_storage_page_size = 0x1000 };
 
 typedef enum {
-    fs_err_overflow,
+    fs_err_success,
     fs_err_exist,
-    fs_err_notaligned,
-    fs_err_success
+    fs_err_overflow,
+    fs_err_notaligned
 } flash_storage_err_t;
 
 typedef struct {
