@@ -70,11 +70,13 @@ flash_storage_err_t flash_storage_init(flash_storage_t *storage,
     if (!(is_multiple_of((uint32_t) mem, 4) &&
           is_multiple_of(item_size, 4)))
     {
+        storage->status = fs_err_notaligned;
         return fs_err_notaligned;
     }
 
     if ((full_size + page_offset) > flash_storage_page_size)
     {
+        storage->status = fs_err_overflow;
         return fs_err_overflow;
     }
 
@@ -87,6 +89,7 @@ flash_storage_err_t flash_storage_init(flash_storage_t *storage,
         storage->capacity_items = params[1];
         storage->page_address = (uint32_t *) page_address;
         storage->page_offset = page_offset;
+        storage->status = fs_err_exist;
 
         return fs_err_exist;
     }
@@ -95,10 +98,25 @@ flash_storage_err_t flash_storage_init(flash_storage_t *storage,
     storage->capacity_items = capacity_items;
     storage->page_address = (uint32_t *) page_address;
     storage->page_offset = page_offset;
+    storage->status = fs_err_success;
 
     flash_storage_rewrite(storage);
 
     return fs_err_success;
+}
+
+static bool flash_storage_item_is_empty(flash_storage_t *storage,
+                                        uint8_t *ptr)
+{
+    uint8_t control_byte = 0xFF;
+    uint32_t i;
+
+    for (i = 0; i < storage->item_size; i++)
+    {
+        control_byte &= *(ptr + i);
+    }
+
+    return control_byte == 0xFF;
 }
 
 void flash_storage_read_last(flash_storage_t *storage, void **data)
@@ -111,17 +129,16 @@ void flash_storage_read_last(flash_storage_t *storage, void **data)
     uint8_t *last_item = first_item +
                          storage->item_size * (storage->capacity_items - 1);
 
+    if (!((storage->status == fs_err_success) ||
+          (storage->status == fs_err_exist)))
+    {
+        *data = NULL;
+        return;
+    }
+
     for (; last_item >= first_item; last_item -= storage->item_size)
     {
-        uint8_t control_byte = 0xFF;
-        uint32_t i;
-
-        for (i = 0; i < storage->item_size; i++)
-        {
-            control_byte &= *(last_item + i);
-        }
-
-        if (control_byte != 0xFF)
+        if (!flash_storage_item_is_empty(storage, last_item))
         {
             *data = last_item;
             return;
@@ -131,7 +148,7 @@ void flash_storage_read_last(flash_storage_t *storage, void **data)
     *data = NULL;
 }
 
-void flash_storage_write(flash_storage_t *storage, void *data)
+bool flash_storage_write(flash_storage_t *storage, void *data)
 {
     uint8_t *first_item = (uint8_t *) storage->page_address +
                           storage->page_offset +
@@ -141,29 +158,29 @@ void flash_storage_write(flash_storage_t *storage, void *data)
     uint8_t *last_item = first_item +
                          storage->item_size * (storage->capacity_items - 1);
 
+    if (!((storage->status == fs_err_success) ||
+          (storage->status == fs_err_exist)))
+    {
+        return false;
+    }
+
     for (; first_item <= last_item; first_item += storage->item_size)
     {
-        uint8_t control_byte = 0xFF;
-        uint32_t i;
-
-        for (i = 0; i < storage->item_size; i++)
+        if (flash_storage_item_is_empty(storage, first_item))
         {
-            control_byte &= *(first_item + i);
-        }
-
-        if (control_byte == 0xFF)
-        {
-            flash_storage_write_bytes((uint32_t) first_item, data, storage->item_size);
+            flash_storage_write_bytes((uint32_t) first_item,
+                                      data,
+                                      storage->item_size);
 
             while (!flash_storage_write_done_check())
             {
 
             }
 
-            return;
+            return true;
         }
     }
 
     flash_storage_rewrite(storage);
-    flash_storage_write(storage, data);
+    return flash_storage_write(storage, data);
 }
