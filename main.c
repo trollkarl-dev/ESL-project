@@ -248,6 +248,8 @@ static void save_state(void);
 
 static void button_onclick(uint8_t clicks)
 {
+    colorpicker_state_t cpicker_state;
+
     NRF_LOG_INFO("Clicks - %d", clicks);
 
     if (clicks != 2)
@@ -256,18 +258,16 @@ static void button_onclick(uint8_t clicks)
     }
 
     colorpicker_next_state((colorpicker_t *) &cpicker);
+    cpicker_state = colorpicker_get_state((colorpicker_t *) &cpicker);
 
-    if (colorpicker_get_state((colorpicker_t *) &cpicker) == cp_state_noinpt)
+    if (cpicker_state == cp_state_noinpt)
     {
         save_state();
     }
 
-    NRF_LOG_INFO("%s mode is in progress",
-                 cpicker_modenames[colorpicker_get_state((colorpicker_t *) &cpicker)]);
+    NRF_LOG_INFO("%s mode is in progress", cpicker_modenames[cpicker_state]);
 
-    app_timer_start(dispmode_timer,
-                    APP_TIMER_TICKS(dispmode_fast_ms),
-                    NULL);
+    app_timer_start(dispmode_timer, APP_TIMER_TICKS(dispmode_fast_ms), NULL);
 }
 
 static void button_onhold(void)
@@ -338,7 +338,7 @@ static colorpicker_save_t default_save = {
 };
 
 static volatile flash_storage_t cpicker_storage;
-enum { cpicker_storage_size = 64 };
+enum { cpicker_storage_size_items = 64 };
 
 void *cpicker_storage_top =
 (void *) (BOOTLOADER_START_ADDR - NRF_DFU_APP_DATA_AREA_SIZE);
@@ -384,20 +384,16 @@ int main(void)
 
     flash_storage_init((flash_storage_t *) &cpicker_storage,
                        sizeof(colorpicker_save_t),
-                       cpicker_storage_size,
+                       cpicker_storage_size_items,
                        cpicker_storage_top);
 
-    flash_storage_read_last((flash_storage_t *) &cpicker_storage,
-                            &cpicker_saved_state);
+    cpicker_saved_state =
+    flash_storage_read_last((flash_storage_t *) &cpicker_storage);
 
     if (cpicker_saved_state == NULL)
-    {
         colorpicker_load((colorpicker_t *) &cpicker, &default_save);
-    }
     else
-    {
         colorpicker_load((colorpicker_t *) &cpicker, cpicker_saved_state);
-    }
 
     colorpicker_show_color_hsv((colorpicker_t *) &cpicker);
 

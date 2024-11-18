@@ -17,7 +17,7 @@ extern "C" {
            +-----+-----+-----+-----+
 0x00001004 |   Item Size (bytes)   |
            +-----+-----+-----+-----+
-0x00001008 |    Capacity (Items)   |
+0x00001008 |    Capacity (items)   |
            +-----+-----+-----+-----+
 0x0000100C |         Item 0        |
            +-----+-----+-----+-----+
@@ -44,6 +44,7 @@ typedef enum {
 typedef struct {
     uint32_t item_size;
     uint32_t capacity_items;
+    uint32_t amount;
     uint32_t *page_address;
     uint32_t page_offset;
     flash_storage_err_t status;
@@ -60,7 +61,7 @@ flash_storage_err_t flash_storage_init(flash_storage_t *storage,
                                        uint32_t capacity_items,
                                        void *mem);
 void flash_storage_rewrite(flash_storage_t *storage);
-void flash_storage_read_last(flash_storage_t *storage, void **data);
+void *flash_storage_read_last(flash_storage_t *storage);
 bool flash_storage_write(flash_storage_t *storage, void *data);
 
 #ifdef __cplusplus
