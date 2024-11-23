@@ -356,6 +356,8 @@ static void save_state(void)
                      : "Failed to save the selected color");
 }
 
+
+
 #define READ_SIZE 1
 
 static char m_rx_buffer[READ_SIZE];
@@ -380,6 +382,91 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(usb_cdc_acm,
                             CDC_ACM_DATA_EPOUT,
                             APP_USBD_CDC_COMM_PROTOCOL_NONE);
 
+
+enum { colorpicker_cli_max_buflen = 256 };
+enum { colorpicker_cli_max_msg_buflen = 256 };
+enum { colorpicker_cli_max_tokens = 4 };
+
+typedef struct {
+    uint32_t char_cnt;
+    char buffer[colorpicker_cli_max_buflen + 1];
+    char const *token_array[colorpicker_cli_max_tokens];
+} colorpicker_cli_t;
+
+static volatile colorpicker_cli_t cpicker_cli = {
+    .char_cnt = 0
+};
+
+static int split(char *s, int limit, int tok_max_cnt, char const **token_array)
+{
+    int i = 0;
+    int idx = 0;
+
+    while (1)
+    {
+        while ((s[idx] == ' ') && (idx < limit))
+            idx++;
+
+        if (idx >= limit)
+            return i;
+
+        if (i >= tok_max_cnt)
+            return -1;
+
+        token_array[i++] = s + idx;
+
+        while ((s[idx] != ' ') && (idx < limit))
+            idx++;
+
+        if (idx >= limit)
+            return i;
+    }
+
+    return i;
+}
+
+static void colorpicker_cli_getc(colorpicker_cli_t *cli, char c)
+{
+    if (cli->char_cnt < colorpicker_cli_max_buflen)
+    {
+        cli->buffer[cli->char_cnt++] = c;
+    }
+}
+
+static void colorpicker_cli_puts(colorpicker_cli_t *cli, const char *s)
+{
+    app_usbd_cdc_acm_write(&usb_cdc_acm, s, strlen(s));
+}
+
+static void colorpicker_cli_parse(colorpicker_cli_t *cli)
+{
+    int cnt;
+    uint32_t char_cnt = cli->char_cnt;
+    static char msg_buf[colorpicker_cli_max_msg_buflen];
+
+    cli->char_cnt = 0;
+    cli->buffer[char_cnt] = '\0';
+
+    if (char_cnt == 0)
+    {
+        colorpicker_cli_puts(cli, "Nothing to do!\r\n");
+        return;
+    }
+
+    cnt = split(cli->buffer, char_cnt, colorpicker_cli_max_tokens, cli->token_array);
+
+    if (cnt == -1)
+    {
+        colorpicker_cli_puts(cli, "Too many arguments!\r\n");
+        return;
+    }
+    else
+    {
+        snprintf(msg_buf, colorpicker_cli_max_msg_buflen, "Number of tokens: %d\r\n", cnt);
+        colorpicker_cli_puts(cli, msg_buf);
+        return;
+    }
+}
 
 static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
                            app_usbd_cdc_acm_user_event_t event)
@@ -418,12 +505,17 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
             if (m_rx_buffer[0] == '\r' || m_rx_buffer[0] == '\n')
             {
                 ret = app_usbd_cdc_acm_write(&usb_cdc_acm, "\r\n", 2);
+
+                colorpicker_cli_parse((colorpicker_cli_t *) &cpicker_cli);
             }
             else
             {
                 ret = app_usbd_cdc_acm_write(&usb_cdc_acm,
                                              m_rx_buffer,
                                              READ_SIZE);
+
+                colorpicker_cli_getc((colorpicker_cli_t *) &cpicker_cli,
+                                                           m_rx_buffer[0]);
             }
 
             /* Fetch data until internal buffer is empty */
