@@ -68,6 +68,7 @@ SRC_FILES += \
   $(PROJ_DIR)/lib/colorpicker.c \
   $(PROJ_DIR)/lib/flash_storage.c \
   $(PROJ_DIR)/lib/button.c \
+  $(PROJ_DIR)/lib/cli.c \
   $(PROJ_DIR)/main.c \
 
 # Include folders common to all targets

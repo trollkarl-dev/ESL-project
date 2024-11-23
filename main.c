@@ -27,6 +27,7 @@
 #include "lib/button.h"
 #include "lib/colorpicker.h"
 #include "lib/flash_storage.h"
+#include "lib/cli.h"
 
 APP_TIMER_DEF(dispmode_timer);
 APP_TIMER_DEF(debounce_timer);
@@ -153,7 +154,7 @@ static void pwm_set_duty_cycle(pwm_wrapper_t *pwm,
     }
 }
 
-static void colorpicker_show_color_hsv(colorpicker_t *c)
+static void colorpicker_show_color(colorpicker_t *c)
 {
     rgb_t rgb = hsv2rgb(c->color);
 
@@ -276,7 +277,7 @@ static void button_onhold(void)
     colorpicker_next_color((colorpicker_t *) &cpicker);
 
     if (colorpicker_get_state((colorpicker_t *) &cpicker) != cp_state_noinpt)
-        colorpicker_show_color_hsv((colorpicker_t *) &cpicker);
+        colorpicker_show_color((colorpicker_t *) &cpicker);
 }
 
 static bool button_is_pressed(void)
@@ -382,90 +383,11 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(usb_cdc_acm,
                             CDC_ACM_DATA_EPOUT,
                             APP_USBD_CDC_COMM_PROTOCOL_NONE);
 
+static volatile cli_t cpicker_cli;
 
-enum { colorpicker_cli_max_buflen = 256 };
-enum { colorpicker_cli_max_msg_buflen = 256 };
-enum { colorpicker_cli_max_tokens = 4 };
-
-typedef struct {
-    uint32_t char_cnt;
-    char buffer[colorpicker_cli_max_buflen + 1];
-    char const *token_array[colorpicker_cli_max_tokens];
-} colorpicker_cli_t;
-
-static volatile colorpicker_cli_t cpicker_cli = {
-    .char_cnt = 0
-};
-
-static int split(char *s, int limit, int tok_max_cnt, char const **token_array)
-{
-    int i = 0;
-    int idx = 0;
-
-    while (1)
-    {
-        while ((s[idx] == ' ') && (idx < limit))
-            idx++;
-
-        if (idx >= limit)
-            return i;
-
-        if (i >= tok_max_cnt)
-            return -1;
-
-        token_array[i++] = s + idx;
-
-        while ((s[idx] != ' ') && (idx < limit))
-            idx++;
-
-        if (idx >= limit)
-            return i;
-    }
-
-    return i;
-}
-
-static void colorpicker_cli_getc(colorpicker_cli_t *cli, char c)
-{
-    if (cli->char_cnt < colorpicker_cli_max_buflen)
-    {
-        cli->buffer[cli->char_cnt++] = c;
-    }
-}
-
-static void colorpicker_cli_puts(colorpicker_cli_t *cli, const char *s)
+void cli_puts(cli_t *cli, const char *s)
 {
     app_usbd_cdc_acm_write(&usb_cdc_acm, s, strlen(s));
-}
-
-static void colorpicker_cli_parse(colorpicker_cli_t *cli)
-{
-    int cnt;
-    uint32_t char_cnt = cli->char_cnt;
-    static char msg_buf[colorpicker_cli_max_msg_buflen];
-
-    cli->char_cnt = 0;
-    cli->buffer[char_cnt] = '\0';
-
-    if (char_cnt == 0)
-    {
-        colorpicker_cli_puts(cli, "Nothing to do!\r\n");
-        return;
-    }
-
-    cnt = split(cli->buffer, char_cnt, colorpicker_cli_max_tokens, cli->token_array);
-
-    if (cnt == -1)
-    {
-        colorpicker_cli_puts(cli, "Too many arguments!\r\n");
-        return;
-    }
-    else
-    {
-        snprintf(msg_buf, colorpicker_cli_max_msg_buflen, "Number of tokens: %d\r\n", cnt);
-        colorpicker_cli_puts(cli, msg_buf);
-        return;
-    }
 }
 
 static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
@@ -506,7 +428,7 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
             {
                 ret = app_usbd_cdc_acm_write(&usb_cdc_acm, "\r\n", 2);
 
-                colorpicker_cli_parse((colorpicker_cli_t *) &cpicker_cli);
+                cli_parse((cli_t *) &cpicker_cli);
             }
             else
             {
@@ -514,8 +436,7 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
                                              m_rx_buffer,
                                              READ_SIZE);
 
-                colorpicker_cli_getc((colorpicker_cli_t *) &cpicker_cli,
-                                                           m_rx_buffer[0]);
+                cli_getc((cli_t *) &cpicker_cli, m_rx_buffer[0]);
             }
 
             /* Fetch data until internal buffer is empty */
@@ -528,6 +449,34 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
     }
     default:
         break;
+    }
+}
+
+void cpicker_cli_exec_callback(char const ** tokens, int tokens_amount)
+{
+    static const char *rgb_command = "HSV";
+    colorpicker_save_t save;
+
+    if ((tokens_amount == 4) &&
+        (0 == strncmp(tokens[0], rgb_command, strlen(rgb_command))))
+    {
+        int i;
+        uint8_t colors[3];
+
+        for (i = 1; i < 4; i++)
+        {
+            colors[i-1] = atoi(tokens[i]);
+        }
+            colorpicker_dump((colorpicker_t *) &cpicker, &save);
+
+            save.color = (hsv_t) {colors[0] % (max_hue + 1),
+                                  colors[1] % (max_saturation + 1),
+                                  colors[2] % (max_brightness + 1)};
+            save.sat_cnt = 0;
+            save.val_cnt = 0;
+
+            colorpicker_load((colorpicker_t *) &cpicker, &save);
+            colorpicker_show_color((colorpicker_t *) &cpicker);
     }
 }
 
@@ -545,12 +494,13 @@ int main(void)
     nrf_drv_clock_init();
     nrf_drv_clock_lfclk_request(NULL);
 
-
     pwm_init(&my_pwm, channels, max_pct, true);
     pwm_run(&my_pwm);
 
     logs_init();
     NRF_LOG_INFO("Starting up the HSV color-picker device");
+
+    cli_init((cli_t *) &cpicker_cli, cpicker_cli_exec_callback);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);
@@ -576,7 +526,7 @@ int main(void)
     else
         colorpicker_load((colorpicker_t *) &cpicker, cpicker_saved_state);
 
-    colorpicker_show_color_hsv((colorpicker_t *) &cpicker);
+    colorpicker_show_color((colorpicker_t *) &cpicker);
 
     button_init((button_t *) &button,
                 &button_timings,
