@@ -47,11 +47,10 @@ void cli_getc(cli_t *cli, char c)
     }
 }
 
-void cli_parse(cli_t *cli)
+void cli_process(cli_t *cli)
 {
     int cnt;
     uint32_t char_cnt = cli->char_cnt;
-    static char msg_buf[cli_max_msg_buflen];
 
     cli->char_cnt = 0;
     cli->buffer[char_cnt] = '\0';
@@ -73,14 +72,16 @@ void cli_parse(cli_t *cli)
     {
         int i;
 
-        snprintf(msg_buf, cli_max_msg_buflen, "Number of tokens: %d\r\n", cnt);
-        cli_puts(cli, msg_buf);
-
         for (i = 0; i < cli->cmds_amount; i++)
         {
             if (0 == strncmp(cli->token_array[i], cli->cmds[i].name, strlen(cli->cmds[i].name)))
             {
-                cli->cmds[i].callback(cli->token_array, cnt);
+                if (cli_success != cli->cmds[i].worker(cli->token_array, cnt))
+                {
+                    cli_puts(cli, "Usage: ");
+                    cli_puts(cli, cli->cmds[i].usage);
+                }
+
                 return;
             }
         }

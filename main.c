@@ -428,7 +428,7 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
             {
                 ret = app_usbd_cdc_acm_write(&usb_cdc_acm, "\r\n", 2);
 
-                cli_parse((cli_t *) &cpicker_cli);
+                cli_process((cli_t *) &cpicker_cli);
             }
             else
             {
@@ -452,7 +452,7 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
     }
 }
 
-void cpicker_cli_set_hsv(char const ** tokens, int tokens_amount)
+cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount)
 {
     colorpicker_save_t save;
     int i;
@@ -461,6 +461,9 @@ void cpicker_cli_set_hsv(char const ** tokens, int tokens_amount)
     for (i = 1; i < 4; i++)
     {
         colors[i-1] = atoi(tokens[i]);
+
+        if ((colors[i-1] == 0) && tokens[i][0] != '0')
+            return cli_error;
     }
 
     colorpicker_dump((colorpicker_t *) &cpicker, &save);
@@ -473,10 +476,17 @@ void cpicker_cli_set_hsv(char const ** tokens, int tokens_amount)
 
     colorpicker_load((colorpicker_t *) &cpicker, &save);
     colorpicker_show_color((colorpicker_t *) &cpicker);
+
+    return cli_success;
 }
 
-static const cli_command_t cpicker_commands[] = {
-    {"HSV", cpicker_cli_set_hsv}
+static const cli_command_t cpicker_commands[] =
+{
+    {
+        .name = "HSV",
+        .usage = "HSV <r> [0..360] <g> [0..100] <b> [0..100]\r\n",
+        .worker = cpicker_cli_set_hsv
+    }
 };
 
 int main(void)
