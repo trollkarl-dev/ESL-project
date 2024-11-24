@@ -1,6 +1,7 @@
 #include "cli.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static int split(char *s, int limit, int tok_max_cnt, char const **token_array)
 {
@@ -30,10 +31,12 @@ static int split(char *s, int limit, int tok_max_cnt, char const **token_array)
     return i;
 }
 
-void cli_init(cli_t *cli, cli_exec_cb exec_cb)
+void cli_init(cli_t *cli, cli_command_t const *cmds, uint32_t cmds_amount)
 {
     cli->char_cnt = 0;
-    cli->exec_cb = exec_cb;
+
+    cli->cmds = cmds;
+    cli->cmds_amount = cmds_amount;
 }
 
 void cli_getc(cli_t *cli, char c)
@@ -63,15 +66,26 @@ void cli_parse(cli_t *cli)
 
     if (cnt == -1)
     {
-        cli_puts(cli, "Too many arguments!\r\n");
+        cli_puts(cli, "Too many tokens!\r\n");
         return;
     }
     else
     {
+        int i;
+
         snprintf(msg_buf, cli_max_msg_buflen, "Number of tokens: %d\r\n", cnt);
         cli_puts(cli, msg_buf);
 
-        cli->exec_cb(cli->token_array, cnt);
+        for (i = 0; i < cli->cmds_amount; i++)
+        {
+            if (0 == strncmp(cli->token_array[i], cli->cmds[i].name, strlen(cli->cmds[i].name)))
+            {
+                cli->cmds[i].callback(cli->token_array, cnt);
+                return;
+            }
+        }
+
+        cli_puts(cli, "Unknown command!\r\n");
         return;
     }
 }

@@ -452,33 +452,32 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
     }
 }
 
-void cpicker_cli_exec_callback(char const ** tokens, int tokens_amount)
+void cpicker_cli_set_hsv(char const ** tokens, int tokens_amount)
 {
-    static const char *rgb_command = "HSV";
     colorpicker_save_t save;
+    int i;
+    uint16_t colors[3];
 
-    if ((tokens_amount == 4) &&
-        (0 == strncmp(tokens[0], rgb_command, strlen(rgb_command))))
+    for (i = 1; i < 4; i++)
     {
-        int i;
-        uint8_t colors[3];
-
-        for (i = 1; i < 4; i++)
-        {
-            colors[i-1] = atoi(tokens[i]);
-        }
-            colorpicker_dump((colorpicker_t *) &cpicker, &save);
-
-            save.color = (hsv_t) {colors[0] % (max_hue + 1),
-                                  colors[1] % (max_saturation + 1),
-                                  colors[2] % (max_brightness + 1)};
-            save.sat_cnt = 0;
-            save.val_cnt = 0;
-
-            colorpicker_load((colorpicker_t *) &cpicker, &save);
-            colorpicker_show_color((colorpicker_t *) &cpicker);
+        colors[i-1] = atoi(tokens[i]);
     }
+
+    colorpicker_dump((colorpicker_t *) &cpicker, &save);
+
+    save.color = (hsv_t) {colors[0] % (max_hue + 1),
+                          colors[1] % (max_saturation + 1),
+                          colors[2] % (max_brightness + 1)};
+    save.sat_cnt = 0;
+    save.val_cnt = 0;
+
+    colorpicker_load((colorpicker_t *) &cpicker, &save);
+    colorpicker_show_color((colorpicker_t *) &cpicker);
 }
+
+static const cli_command_t cpicker_commands[] = {
+    {"HSV", cpicker_cli_set_hsv}
+};
 
 int main(void)
 {
@@ -500,7 +499,7 @@ int main(void)
     logs_init();
     NRF_LOG_INFO("Starting up the HSV color-picker device");
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_cli_exec_callback);
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 1);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);
@@ -541,7 +540,6 @@ int main(void)
     {
         while (app_usbd_event_queue_process())
         {
-            /* Nothing to do */
         }
 
         LOG_BACKEND_USB_PROCESS();
