@@ -76,10 +76,19 @@ void cli_process(cli_t *cli)
         {
             if (0 == strncmp(cli->token_array[i], cli->cmds[i].name, strlen(cli->cmds[i].name)))
             {
-                if (cli_success != cli->cmds[i].worker(cli->token_array, cnt))
+                uint32_t msglen;
+
+                if (cli_success != cli->cmds[i].worker(cli->token_array, cnt, cli->msg_buffer, &msglen))
                 {
                     cli_puts(cli, "Usage: ");
                     cli_puts(cli, cli->cmds[i].usage);
+                }
+                else
+                {
+                    if (msglen != 0)
+                    {
+                        cli_puts(cli, cli->msg_buffer);
+                    }
                 }
 
                 return;

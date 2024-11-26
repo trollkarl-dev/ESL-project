@@ -385,10 +385,10 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(usb_cdc_acm,
 
 static volatile cli_t cpicker_cli;
 
-void cli_puts(cli_t *cli, const char *s)
-{
-    app_usbd_cdc_acm_write(&usb_cdc_acm, s, strlen(s));
-}
+
+static volatile bool gs_do_cli_process = false;
+static volatile bool gs_tx_done = false;
+static volatile bool gs_port_opened = false;
 
 static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
                            app_usbd_cdc_acm_user_event_t event)
@@ -400,15 +400,18 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
         ret_code_t ret;
         ret = app_usbd_cdc_acm_read(&usb_cdc_acm, m_rx_buffer, READ_SIZE);
         UNUSED_VARIABLE(ret);
+        gs_port_opened = true;
         break;
     }
     case APP_USBD_CDC_ACM_USER_EVT_PORT_CLOSE:
     {
+        gs_port_opened = false;
         break;
     }
     case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
     {
         NRF_LOG_INFO("tx done");
+        gs_tx_done = true;
         break;
     }
     case APP_USBD_CDC_ACM_USER_EVT_RX_DONE:
@@ -427,8 +430,7 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
             if (m_rx_buffer[0] == '\r' || m_rx_buffer[0] == '\n')
             {
                 ret = app_usbd_cdc_acm_write(&usb_cdc_acm, "\r\n", 2);
-
-                cli_process((cli_t *) &cpicker_cli);
+                gs_do_cli_process = true;
             }
             else
             {
@@ -452,13 +454,18 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
     }
 }
 
-cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount)
+cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     colorpicker_save_t save;
     int i;
     uint16_t colors[3];
 
-    for (i = 1; i < 4; i++)
+    *msglen = 0;
+
+    if (tokens_amount != 4)
+        return cli_error;
+
+    for (i = 1; i < tokens_amount; i++)
     {
         colors[i-1] = atoi(tokens[i]);
 
@@ -471,11 +478,18 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount)
     save.color = (hsv_t) {colors[0] % (max_hue + 1),
                           colors[1] % (max_saturation + 1),
                           colors[2] % (max_brightness + 1)};
-    save.sat_cnt = 0;
-    save.val_cnt = 0;
+    save.sat_cnt = save.color.s;
+    save.val_cnt = save.color.v;
 
     colorpicker_load((colorpicker_t *) &cpicker, &save);
     colorpicker_show_color((colorpicker_t *) &cpicker);
+
+    *msglen = snprintf(msg,
+                       cli_max_msgbuflen,
+                       "Color set to H=%d, S=%d, V=%d\r\n",
+                       save.color.h,
+                       save.color.s,
+                       save.color.v);
 
     return cli_success;
 }
@@ -484,10 +498,52 @@ static const cli_command_t cpicker_commands[] =
 {
     {
         .name = "HSV",
-        .usage = "HSV <r> [0..360] <g> [0..100] <b> [0..100]\r\n",
+        .usage = "HSV <H> [0..360] <S> [0..100] <V> [0..100]\r\n",
         .worker = cpicker_cli_set_hsv
     }
 };
+
+void cli_puts(cli_t *cli, const char *s)
+{
+    uint32_t len = strlen(s);
+
+    if (!gs_port_opened)
+    {
+        return;
+    }
+
+    size_t offset = 0;
+    do
+    {
+        size_t tx_len = len - offset;
+
+        while (!gs_tx_done)
+        {
+            while (app_usbd_event_queue_process())
+            {
+            }
+        }
+
+        if (tx_len > NRFX_USBD_EPSIZE)
+        {
+            tx_len = NRFX_USBD_EPSIZE;
+        }
+
+        gs_tx_done = false;
+        ret_code_t ret = app_usbd_cdc_acm_write(&usb_cdc_acm,
+                                                s + offset,
+                                                tx_len);
+        APP_ERROR_CHECK(ret);
+        while (!gs_tx_done)
+        {
+            while (app_usbd_event_queue_process())
+            {
+            }
+        }
+
+        offset += tx_len;
+    } while (offset < len);
+}
 
 int main(void)
 {
@@ -554,6 +610,12 @@ int main(void)
 
         LOG_BACKEND_USB_PROCESS();
         NRF_LOG_PROCESS();
+
+        if (gs_do_cli_process)
+        {
+            gs_do_cli_process = false;
+            cli_process((cli_t *) &cpicker_cli);
+        }
 
         __WFI();
     }

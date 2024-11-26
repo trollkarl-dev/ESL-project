@@ -8,6 +8,7 @@ extern "C" {
 #include <stdint.h>
 
 enum { cli_max_buflen = 256 };
+enum { cli_max_msgbuflen = 256 };
 enum { cli_max_tokens = 4 };
 
 typedef enum {
@@ -18,7 +19,7 @@ typedef enum {
 typedef struct {
     char const *name;
     char const *usage;
-    cli_result_t (*worker)(char const **tokens, int tokens_amount);
+    cli_result_t (*worker)(char const **tokens, int tokens_amount, char *msg, uint32_t *msglen);
 } cli_command_t;
 
 typedef struct {
@@ -26,6 +27,7 @@ typedef struct {
     cli_command_t const *cmds;
     uint32_t cmds_amount;
     char buffer[cli_max_buflen + 1];
+    char msg_buffer[cli_max_msgbuflen + 1];
     char const *token_array[cli_max_tokens];
 } cli_t;
 
