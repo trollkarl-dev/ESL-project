@@ -471,6 +471,12 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
 
         if ((colors[i-1] == 0) && tokens[i][0] != '0')
             return cli_error;
+
+        if ((i == 1 && colors[i-1] > max_hue) ||
+            (i == 2 && colors[i-1] > max_saturation) ||
+            (i == 3 && colors[i-1] > max_brightness)
+           )
+            return cli_error;
     }
 
     colorpicker_dump((colorpicker_t *) &cpicker, &save);
@@ -499,6 +505,7 @@ static const cli_command_t cpicker_commands[] =
     {
         .name = "HSV",
         .usage = "HSV <H> [0..360] <S> [0..100] <V> [0..100]\r\n",
+        .description = "Set current color to specified one (HSV color model)\r\n",
         .worker = cpicker_cli_set_hsv
     }
 };

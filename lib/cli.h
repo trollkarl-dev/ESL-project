@@ -7,6 +7,8 @@ extern "C" {
 
 #include <stdint.h>
 
+#define CLI_HELP_CMD_NAME "help"
+
 enum { cli_max_buflen = 256 };
 enum { cli_max_msgbuflen = 256 };
 enum { cli_max_tokens = 4 };
@@ -19,6 +21,7 @@ typedef enum {
 typedef struct {
     char const *name;
     char const *usage;
+    char const *description;
     cli_result_t (*worker)(char const **tokens, int tokens_amount, char *msg, uint32_t *msglen);
 } cli_command_t;
 

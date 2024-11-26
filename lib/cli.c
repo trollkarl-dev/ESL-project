@@ -74,7 +74,7 @@ void cli_process(cli_t *cli)
 
         for (i = 0; i < cli->cmds_amount; i++)
         {
-            if (0 == strncmp(cli->token_array[i], cli->cmds[i].name, strlen(cli->cmds[i].name)))
+            if (0 == strncmp(cli->token_array[0], cli->cmds[i].name, strlen(cli->cmds[i].name)))
             {
                 uint32_t msglen;
 
@@ -93,6 +93,18 @@ void cli_process(cli_t *cli)
 
                 return;
             }
+        }
+
+        if (0 == strncmp(cli->token_array[0], CLI_HELP_CMD_NAME, strlen(CLI_HELP_CMD_NAME)))
+        {
+            for (i = 0; i < cli->cmds_amount; i++)
+            {
+                cli_puts(cli, cli->cmds[i].name);
+                cli_puts(cli, "\t");
+                cli_puts(cli, cli->cmds[i].description);
+            }
+
+            return;
         }
 
         cli_puts(cli, "Unknown command!\r\n");
