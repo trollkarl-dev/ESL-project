@@ -484,8 +484,8 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
     save.color = (hsv_t) {colors[0],
                           colors[1],
                           colors[2]};
-    save.sat_cnt = colors[1];
-    save.val_cnt = colors[2];
+    save.sat_cnt = save.color.s;
+    save.val_cnt = save.color.v;
 
     colorpicker_load((colorpicker_t *) &cpicker, &save);
     colorpicker_show_color((colorpicker_t *) &cpicker);
@@ -613,12 +613,6 @@ int main(void)
     logs_init();
     NRF_LOG_INFO("Starting up the HSV color-picker device");
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 2);
-
-    app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
-    ret_code_t ret = app_usbd_class_append(class_cdc_acm);
-    APP_ERROR_CHECK(ret);
-
     app_timer_init();
     create_timers();
 
@@ -649,6 +643,12 @@ int main(void)
     gpiote_init_on_toggle(my_btn_mappings[brd_btn_idx],
                           NRF_GPIO_PIN_PULLUP,
                           gpiote_handler);
+
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 2);
+
+    app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
+    ret_code_t ret = app_usbd_class_append(class_cdc_acm);
+    APP_ERROR_CHECK(ret);
 
     while (true)
     {
