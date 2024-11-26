@@ -8,6 +8,7 @@ extern "C" {
 #include <stdint.h>
 
 #define CLI_HELP_CMD_NAME "help"
+#define CLI_HELP_CMD_DESCRIPTION "Print this message\r\n"
 
 enum { cli_max_buflen = 256 };
 enum { cli_max_msgbuflen = 256 };

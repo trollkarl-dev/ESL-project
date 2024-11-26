@@ -11,6 +11,26 @@ enum { max_hue = 360 };
 enum { max_saturation = 100 };
 enum { max_brightness = 100 };
 
+#define MIN3(x,y,z)  ((y) <= (z) ? \
+                          ((x) <= (y) ? (x) : (y)) \
+                      : \
+                          ((x) <= (z) ? (x) : (z)))
+ 
+#define MAX3(x,y,z)  ((y) >= (z) ? \
+                         ((x) >= (y) ? (x) : (y)) \
+                     : \
+                         ((x) >= (z) ? (x) : (z)))
+ 
+struct rgb_color {
+    float r, g, b;    // 0.0 and 1.0
+};
+ 
+struct hsv_color {
+    float hue;        // 0.0 and 360.0 
+    float sat;        // 0.0 (gray) and 1.0
+    float val;        // 0.0 (black) and 1.0 
+};
+
 typedef struct {
     uint16_t h;
     uint8_t s;
@@ -39,6 +59,7 @@ inline rgb_t rgb_float(float r, float g, float b)
 }
 
 rgb_t hsv2rgb(hsv_t hsv);
+hsv_t rgb2hsv(rgb_t rgb);
 
 #ifdef __cplusplus
 }

@@ -481,9 +481,9 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
 
     colorpicker_dump((colorpicker_t *) &cpicker, &save);
 
-    save.color = (hsv_t) {colors[0] % (max_hue + 1),
-                          colors[1] % (max_saturation + 1),
-                          colors[2] % (max_brightness + 1)};
+    save.color = (hsv_t) {colors[0],
+                          colors[1],
+                          colors[2]};
     save.sat_cnt = save.color.s;
     save.val_cnt = save.color.v;
 
@@ -500,6 +500,47 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
     return cli_success;
 }
 
+cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
+{
+    colorpicker_save_t save;
+    int i;
+    uint16_t colors[3];
+
+    *msglen = 0;
+
+    if (tokens_amount != 4)
+        return cli_error;
+
+    for (i = 1; i < tokens_amount; i++)
+    {
+        colors[i-1] = atoi(tokens[i]);
+
+        if ((colors[i-1] == 0) && tokens[i][0] != '0')
+            return cli_error;
+
+        if (colors[i-1] > max_pct)
+            return cli_error;
+    }
+
+    colorpicker_dump((colorpicker_t *) &cpicker, &save);
+
+    save.color = rgb2hsv(rgb(colors[0], colors[1], colors[2]));
+    save.sat_cnt = save.color.s;
+    save.val_cnt = save.color.v;
+
+    colorpicker_load((colorpicker_t *) &cpicker, &save);
+    colorpicker_show_color((colorpicker_t *) &cpicker);
+
+    *msglen = snprintf(msg,
+                       cli_max_msgbuflen,
+                       "Color set to R=%d, G=%d, B=%d\r\n",
+                       colors[0],
+                       colors[1],
+                       colors[2]);
+
+    return cli_success;
+}
+
 static const cli_command_t cpicker_commands[] =
 {
     {
@@ -507,6 +548,12 @@ static const cli_command_t cpicker_commands[] =
         .usage = "HSV <H> [0..360] <S> [0..100] <V> [0..100]\r\n",
         .description = "Set current color to specified one (HSV color model)\r\n",
         .worker = cpicker_cli_set_hsv
+    },
+    {
+        .name = "RGB",
+        .usage = "RGB <R> [0..100] <G> [0..100] <B> [0..100]\r\n",
+        .description = "Set current color to specified one (RGB color model)\r\n",
+        .worker = cpicker_cli_set_rgb
     }
 };
 
@@ -541,12 +588,6 @@ void cli_puts(cli_t *cli, const char *s)
                                                 s + offset,
                                                 tx_len);
         APP_ERROR_CHECK(ret);
-        while (!gs_tx_done)
-        {
-            while (app_usbd_event_queue_process())
-            {
-            }
-        }
 
         offset += tx_len;
     } while (offset < len);
@@ -572,7 +613,7 @@ int main(void)
     logs_init();
     NRF_LOG_INFO("Starting up the HSV color-picker device");
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 1);
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 2);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);

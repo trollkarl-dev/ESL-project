@@ -104,6 +104,10 @@ void cli_process(cli_t *cli)
                 cli_puts(cli, cli->cmds[i].description);
             }
 
+            cli_puts(cli, CLI_HELP_CMD_NAME);
+            cli_puts(cli, "\t");
+            cli_puts(cli, CLI_HELP_CMD_DESCRIPTION);
+
             return;
         }
 
