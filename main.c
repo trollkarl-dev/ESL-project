@@ -484,8 +484,8 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
     save.color = (hsv_t) {colors[0],
                           colors[1],
                           colors[2]};
-    save.sat_cnt = save.color.s;
-    save.val_cnt = save.color.v;
+    save.sat_cnt = colors[1];
+    save.val_cnt = colors[2];
 
     colorpicker_load((colorpicker_t *) &cpicker, &save);
     colorpicker_show_color((colorpicker_t *) &cpicker);
