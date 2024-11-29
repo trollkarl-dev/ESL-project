@@ -50,9 +50,10 @@ void cli_push_char(cli_t *cli, char c)
     }
 }
 
-void cli_process(cli_t *cli)
+static void cli_process_internal(cli_t *cli)
 {
     int cnt;
+    int i;
     uint32_t char_cnt = cli->char_cnt;
 
     cli->char_cnt = 0;
@@ -60,7 +61,6 @@ void cli_process(cli_t *cli)
 
     if (char_cnt == 0)
     {
-        cli_puts(cli, CLI_PROMPT);
         return;
     }
 
@@ -69,57 +69,54 @@ void cli_process(cli_t *cli)
     if (cnt == -1)
     {
         cli_puts(cli, "Too many tokens!\r\n");
-        cli_puts(cli, CLI_PROMPT);
         return;
     }
-    else
-    {
-        int i;
 
+    if (0 == strncmp(cli->token_array[0], CLI_HELP_CMD_NAME, strlen(CLI_HELP_CMD_NAME)))
+    {
         for (i = 0; i < cli->cmds_amount; i++)
         {
-            if (0 == strncmp(cli->token_array[0], cli->cmds[i].name, strlen(cli->cmds[i].name)))
-            {
-                uint32_t msglen;
-
-                if (cli_success != cli->cmds[i].worker(cli->token_array, cnt, cli->output_buffer, &msglen))
-                {
-                    cli_puts(cli, "Usage: ");
-                    cli_puts(cli, cli->cmds[i].usage);
-                }
-                else
-                {
-                    if (msglen != 0)
-                    {
-                        cli_puts(cli, cli->output_buffer);
-                    }
-                }
-
-                cli_puts(cli, CLI_PROMPT);
-                return;
-            }
-        }
-
-        if (0 == strncmp(cli->token_array[0], CLI_HELP_CMD_NAME, strlen(CLI_HELP_CMD_NAME)))
-        {
-            for (i = 0; i < cli->cmds_amount; i++)
-            {
-                cli_puts(cli, cli->cmds[i].name);
-                cli_puts(cli, "\t");
-                cli_puts(cli, cli->cmds[i].description);
-            }
-
-            cli_puts(cli, CLI_HELP_CMD_NAME);
+            cli_puts(cli, cli->cmds[i].name);
             cli_puts(cli, "\t");
-            cli_puts(cli, CLI_HELP_CMD_DESCRIPTION);
-
-            cli_puts(cli, CLI_PROMPT);
-            return;
+            cli_puts(cli, cli->cmds[i].description);
         }
 
-        cli_puts(cli, "Unknown command!\r\n");
-        cli_puts(cli, CLI_PROMPT);
+        cli_puts(cli, CLI_HELP_CMD_NAME);
+        cli_puts(cli, "\t");
+        cli_puts(cli, CLI_HELP_CMD_DESCRIPTION);
+
         return;
     }
+
+    for (i = 0; i < cli->cmds_amount; i++)
+    {
+        if (0 == strncmp(cli->token_array[0], cli->cmds[i].name, strlen(cli->cmds[i].name)))
+        {
+            uint32_t msglen;
+
+            if (cli_success != cli->cmds[i].worker(cli->token_array, cnt, cli->output_buffer, &msglen))
+            {
+                cli_puts(cli, "Usage: ");
+                cli_puts(cli, cli->cmds[i].usage);
+            }
+            else
+            {
+                if (msglen != 0)
+                {
+                    cli_puts(cli, cli->output_buffer);
+                }
+            }
+
+            return;
+        }
+    }
+
+    cli_puts(cli, "Unknown command!\r\n");
+    return;
 }
 
+void cli_process(cli_t *cli)
+{
+    cli_process_internal(cli);
+    cli_puts(cli, CLI_PROMPT);
+}
