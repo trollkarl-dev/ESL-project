@@ -3,32 +3,35 @@
 #include <stdio.h>
 #include <string.h>
 
-static int split(char *s, int limit, int tok_max_cnt, char const **token_array)
+static int split(char const *input_str,
+                 int char_count_limit,
+                 int tokens_max_count,
+                 char const **token_array)
 {
-    int i = 0;
-    int idx = 0;
+    int tokens_count = 0;
+    int char_idx = 0;
 
     while (1)
     {
-        while ((s[idx] == ' ') && (idx < limit))
-            idx++;
+        while ((input_str[char_idx] == ' ') && (char_idx < char_count_limit))
+            char_idx++;
 
-        if (idx >= limit)
-            return i;
+        if (char_idx >= char_count_limit)
+            return tokens_count;
 
-        if (i >= tok_max_cnt)
+        if (tokens_count >= tokens_max_count)
             return -1;
 
-        token_array[i++] = s + idx;
+        token_array[tokens_count++] = input_str + char_idx;
 
-        while ((s[idx] != ' ') && (idx < limit))
-            idx++;
+        while ((input_str[char_idx] != ' ') && (char_idx < char_count_limit))
+            char_idx++;
 
-        if (idx >= limit)
-            return i;
+        if (char_idx >= char_count_limit)
+            return tokens_count;
     }
 
-    return i;
+    return tokens_count;
 }
 
 void cli_init(cli_t *cli, cli_command_t const *cmds, uint32_t cmds_amount)
@@ -39,11 +42,11 @@ void cli_init(cli_t *cli, cli_command_t const *cmds, uint32_t cmds_amount)
     cli->cmds_amount = cmds_amount;
 }
 
-void cli_getc(cli_t *cli, char c)
+void cli_push_char(cli_t *cli, char c)
 {
-    if (cli->char_cnt < cli_max_buflen)
+    if (cli->char_cnt < cli_max_inbuf_len)
     {
-        cli->buffer[cli->char_cnt++] = c;
+        cli->input_buffer[cli->char_cnt++] = c;
     }
 }
 
@@ -53,19 +56,20 @@ void cli_process(cli_t *cli)
     uint32_t char_cnt = cli->char_cnt;
 
     cli->char_cnt = 0;
-    cli->buffer[char_cnt] = '\0';
+    cli->input_buffer[char_cnt] = '\0';
 
     if (char_cnt == 0)
     {
-        cli_puts(cli, "Nothing to do!\r\n");
+        cli_puts(cli, CLI_PROMPT);
         return;
     }
 
-    cnt = split(cli->buffer, char_cnt, cli_max_tokens, cli->token_array);
+    cnt = split(cli->input_buffer, char_cnt, cli_max_tokens, cli->token_array);
 
     if (cnt == -1)
     {
         cli_puts(cli, "Too many tokens!\r\n");
+        cli_puts(cli, CLI_PROMPT);
         return;
     }
     else
@@ -78,7 +82,7 @@ void cli_process(cli_t *cli)
             {
                 uint32_t msglen;
 
-                if (cli_success != cli->cmds[i].worker(cli->token_array, cnt, cli->msg_buffer, &msglen))
+                if (cli_success != cli->cmds[i].worker(cli->token_array, cnt, cli->output_buffer, &msglen))
                 {
                     cli_puts(cli, "Usage: ");
                     cli_puts(cli, cli->cmds[i].usage);
@@ -87,10 +91,11 @@ void cli_process(cli_t *cli)
                 {
                     if (msglen != 0)
                     {
-                        cli_puts(cli, cli->msg_buffer);
+                        cli_puts(cli, cli->output_buffer);
                     }
                 }
 
+                cli_puts(cli, CLI_PROMPT);
                 return;
             }
         }
@@ -108,10 +113,12 @@ void cli_process(cli_t *cli)
             cli_puts(cli, "\t");
             cli_puts(cli, CLI_HELP_CMD_DESCRIPTION);
 
+            cli_puts(cli, CLI_PROMPT);
             return;
         }
 
         cli_puts(cli, "Unknown command!\r\n");
+        cli_puts(cli, CLI_PROMPT);
         return;
     }
 }

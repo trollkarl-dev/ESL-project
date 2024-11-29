@@ -7,11 +7,12 @@ extern "C" {
 
 #include <stdint.h>
 
+#define CLI_PROMPT "\e[32mcli@colorpicker$\e[0m "
 #define CLI_HELP_CMD_NAME "help"
 #define CLI_HELP_CMD_DESCRIPTION "Print this message\r\n"
 
-enum { cli_max_buflen = 256 };
-enum { cli_max_msgbuflen = 256 };
+enum { cli_max_inbuf_len = 256 };
+enum { cli_max_outbuf_len = 256 };
 enum { cli_max_tokens = 4 };
 
 typedef enum {
@@ -23,22 +24,26 @@ typedef struct {
     char const *name;
     char const *usage;
     char const *description;
-    cli_result_t (*worker)(char const **tokens, int tokens_amount, char *msg, uint32_t *msglen);
+
+    cli_result_t (*worker)(char const **tokens,
+                           int tokens_amount,
+                           char *msg,
+                           uint32_t *msglen);
 } cli_command_t;
 
 typedef struct {
     uint32_t char_cnt;
     cli_command_t const *cmds;
     uint32_t cmds_amount;
-    char buffer[cli_max_buflen + 1];
-    char msg_buffer[cli_max_msgbuflen + 1];
+    char input_buffer[cli_max_inbuf_len + 1];
+    char output_buffer[cli_max_outbuf_len + 1];
     char const *token_array[cli_max_tokens];
 } cli_t;
 
 extern void cli_puts(cli_t *cli, const char *s);
 
 void cli_init(cli_t *cli, cli_command_t const *cmds, uint32_t cmds_amount);
-void cli_getc(cli_t *cli, char c);
+void cli_push_char(cli_t *cli, char c);
 void cli_process(cli_t *cli);
 
 #ifdef __cplusplus

@@ -400,6 +400,7 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
         ret_code_t ret;
         ret = app_usbd_cdc_acm_read(&usb_cdc_acm, m_rx_buffer, READ_SIZE);
         UNUSED_VARIABLE(ret);
+
         gs_port_opened = true;
         break;
     }
@@ -432,13 +433,16 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
                 ret = app_usbd_cdc_acm_write(&usb_cdc_acm, "\r\n", 2);
                 gs_do_cli_process = true;
             }
+            else if (m_rx_buffer[0] == '\b')
+            {
+            }
             else
             {
                 ret = app_usbd_cdc_acm_write(&usb_cdc_acm,
                                              m_rx_buffer,
                                              READ_SIZE);
 
-                cli_getc((cli_t *) &cpicker_cli, m_rx_buffer[0]);
+                cli_push_char((cli_t *) &cpicker_cli, m_rx_buffer[0]);
             }
 
             /* Fetch data until internal buffer is empty */
@@ -479,8 +483,6 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
             return cli_error;
     }
 
-    colorpicker_dump((colorpicker_t *) &cpicker, &save);
-
     save.color = (hsv_t) {colors[0],
                           colors[1],
                           colors[2]};
@@ -491,7 +493,7 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
     colorpicker_show_color((colorpicker_t *) &cpicker);
 
     *msglen = snprintf(msg,
-                       cli_max_msgbuflen,
+                       cli_max_outbuf_len,
                        "Color set to H=%d, S=%d, V=%d\r\n",
                        save.color.h,
                        save.color.s,
@@ -522,8 +524,6 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
             return cli_error;
     }
 
-    colorpicker_dump((colorpicker_t *) &cpicker, &save);
-
     save.color = rgb2hsv(rgb(colors[0], colors[1], colors[2]));
     save.sat_cnt = save.color.s;
     save.val_cnt = save.color.v;
@@ -532,7 +532,7 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
     colorpicker_show_color((colorpicker_t *) &cpicker);
 
     *msglen = snprintf(msg,
-                       cli_max_msgbuflen,
+                       cli_max_outbuf_len,
                        "Color set to R=%d, G=%d, B=%d\r\n",
                        colors[0],
                        colors[1],
