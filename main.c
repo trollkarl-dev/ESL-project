@@ -462,7 +462,7 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
 {
     colorpicker_save_t save;
     int i;
-    uint16_t colors[3];
+    long colors[3];
 
     *msglen = 0;
 
@@ -471,17 +471,20 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
 
     for (i = 1; i < tokens_amount; i++)
     {
-        colors[i-1] = atoi(tokens[i]);
+        char *end;
+        colors[i-1] = strtol(tokens[i], &end, 10);
 
-        if ((colors[i-1] == 0) && tokens[i][0] != '0')
+        if  ((*end != ' ') && (*end != '\0'))
             return cli_error;
 
-        if ((i == 1 && colors[i-1] > max_hue) ||
-            (i == 2 && colors[i-1] > max_saturation) ||
-            (i == 3 && colors[i-1] > max_brightness)
-           )
-            return cli_error;
     }
+
+    if ((colors[0] < 0) || (colors[1] > max_hue))
+        return cli_error;
+    if ((colors[1] < 0) || (colors[1] > max_saturation))
+        return cli_error;
+    if ((colors[2] < 0) || (colors[1] > max_brightness))
+        return cli_error;
 
     save.color = (hsv_t) {colors[0],
                           colors[1],
@@ -506,7 +509,7 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
 {
     colorpicker_save_t save;
     int i;
-    uint16_t colors[3];
+    long colors[3];
 
     *msglen = 0;
 
@@ -515,12 +518,13 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
 
     for (i = 1; i < tokens_amount; i++)
     {
-        colors[i-1] = atoi(tokens[i]);
+        char *end;
+        colors[i-1] = strtol(tokens[i], &end, 10);
 
-        if ((colors[i-1] == 0) && tokens[i][0] != '0')
+        if  ((*end != ' ') && (*end != '\0'))
             return cli_error;
 
-        if (colors[i-1] > max_pct)
+        if ((colors[i-1] > max_pct) || (colors[i-1] < 0))
             return cli_error;
     }
 
@@ -533,7 +537,7 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
 
     *msglen = snprintf(msg,
                        cli_max_outbuf_len,
-                       "Color set to R=%d, G=%d, B=%d\r\n",
+                       "Color set to R=%ld, G=%ld, B=%ld\r\n",
                        colors[0],
                        colors[1],
                        colors[2]);
@@ -545,13 +549,13 @@ static const cli_command_t cpicker_commands[] =
 {
     {
         .name = "HSV",
-        .usage = "HSV <H> [0..360] <S> [0..100] <V> [0..100]\r\n",
+        .usage = "<H> [0..360] <S> [0..100] <V> [0..100]\r\n",
         .description = "Set current color to specified one (HSV color model)\r\n",
         .worker = cpicker_cli_set_hsv
     },
     {
         .name = "RGB",
-        .usage = "RGB <R> [0..100] <G> [0..100] <B> [0..100]\r\n",
+        .usage = "<R> [0..100] <G> [0..100] <B> [0..100]\r\n",
         .description = "Set current color to specified one (RGB color model)\r\n",
         .worker = cpicker_cli_set_rgb
     }

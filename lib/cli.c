@@ -97,6 +97,8 @@ static void cli_process_internal(cli_t *cli)
             if (cli_success != cli->cmds[i].worker(cli->token_array, cnt, cli->output_buffer, &msglen))
             {
                 cli_puts(cli, "Usage: ");
+                cli_puts(cli, cli->cmds[i].name);
+                cli_puts(cli, " ");
                 cli_puts(cli, cli->cmds[i].usage);
             }
             else
