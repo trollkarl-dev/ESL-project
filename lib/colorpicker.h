@@ -21,8 +21,8 @@ typedef enum {
 
 typedef struct {
     colorpicker_state_t state;
-    int16_t sat_cnt;
-    int16_t val_cnt;
+    int16_t sat_increment;
+    int16_t val_increment;
     int16_t dispmode_cnt;
     int16_t max_dispmode_duty_cycle;
     hsv_t color;
@@ -36,8 +36,8 @@ typedef struct {
 
 typedef struct {
     hsv_t color;
-    int16_t sat_cnt;
-    int16_t val_cnt;
+    int16_t sat_increment;
+    int16_t val_increment;
 } colorpicker_save_t;
 
 STATIC_ASSERT(sizeof(colorpicker_save_t) == 8, "Bad size!");

@@ -7,8 +7,8 @@ void colorpicker_init(colorpicker_t *c,
                       int16_t max_dispmode_duty_cycle)
 {
     c->state = cp_state_noinpt;
-    c->sat_cnt = 0;
-    c->val_cnt = 0;
+    c->sat_increment = 1;
+    c->val_increment = 1;
     c->dispmode_cnt = 0;
     c->max_dispmode_duty_cycle = max_dispmode_duty_cycle;
 c->color = initial_color;
@@ -42,12 +42,22 @@ void colorpicker_next_color(colorpicker_t *c)
             c->color.h = (c->color.h + 1) % max_hue;
             break;
         case cp_state_satmod:
-            c->sat_cnt = ((c->sat_cnt+1) % (2*max_saturation));
-            c->color.s = abs(c->sat_cnt - max_saturation);
+            if ((c->color.s == max_saturation && c->sat_increment == 1) ||
+                (c->color.s == 0 && c->sat_increment == -1))
+            {
+                c->sat_increment = -(c->sat_increment);
+            }
+            c->color.s  += c->sat_increment;
+
             break;
         case cp_state_valmod:
-            c->val_cnt = ((c->val_cnt+1) % (2*max_brightness));
-            c->color.v = abs(c->val_cnt - max_brightness);
+            if ((c->color.v == max_brightness && c->val_increment == 1) ||
+                (c->color.v == 0 && c->val_increment == -1))
+            {
+                c->val_increment = -(c->val_increment);
+            }
+            c->color.v  += c->val_increment;
+
             break;
         case cp_state_noinpt:
             break;
@@ -78,13 +88,13 @@ void colorpicker_update_dispmode_data(colorpicker_t *c,
 void colorpicker_dump(colorpicker_t const *c, colorpicker_save_t *s)
 {
     s->color = c->color;
-    s->sat_cnt = c->sat_cnt;
-    s->val_cnt = c->val_cnt;
+    s->sat_increment = c->sat_increment;
+    s->val_increment = c->val_increment;
 }
 
 void colorpicker_load(colorpicker_t *c, colorpicker_save_t const *s)
 {
     c->color = s->color;
-    c->sat_cnt = s->sat_cnt;
-    c->val_cnt = s->val_cnt;
+    c->sat_increment = s->sat_increment;
+    c->val_increment = s->val_increment;
 }

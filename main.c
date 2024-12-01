@@ -335,8 +335,8 @@ bool flash_storage_write_done_check(void)
 
 static colorpicker_save_t default_save = {
     .color = default_color_hsv,
-    .sat_cnt = 0,
-    .val_cnt = 0
+    .sat_increment = 1,
+    .val_increment = 1
 };
 
 static volatile flash_storage_t cpicker_storage;
@@ -489,8 +489,8 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
     save.color = (hsv_t) {colors[0],
                           colors[1],
                           colors[2]};
-    save.sat_cnt = save.color.s;
-    save.val_cnt = save.color.v;
+    save.sat_increment = 1;
+    save.val_increment = 1;
 
     colorpicker_load((colorpicker_t *) &cpicker, &save);
     colorpicker_show_color((colorpicker_t *) &cpicker);
@@ -529,8 +529,8 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
     }
 
     save.color = rgb2hsv(rgb(colors[0], colors[1], colors[2]));
-    save.sat_cnt = save.color.s;
-    save.val_cnt = save.color.v;
+    save.sat_increment = 1;
+    save.val_increment = 1;
 
     colorpicker_load((colorpicker_t *) &cpicker, &save);
     colorpicker_show_color((colorpicker_t *) &cpicker);
