@@ -462,6 +462,42 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
 
 volatile color_list_t cli_colors_list;
 
+void cli_puts(cli_t *cli, const char *s)
+{
+    uint32_t len = strlen(s);
+
+    if (!gs_port_opened)
+    {
+        return;
+    }
+
+    size_t offset = 0;
+    do
+    {
+        size_t tx_len = len - offset;
+
+        while (!gs_tx_done)
+        {
+            while (app_usbd_event_queue_process())
+            {
+            }
+        }
+
+        if (tx_len > NRFX_USBD_EPSIZE)
+        {
+            tx_len = NRFX_USBD_EPSIZE;
+        }
+
+        gs_tx_done = false;
+        ret_code_t ret = app_usbd_cdc_acm_write(&usb_cdc_acm,
+                                                s + offset,
+                                                tx_len);
+        APP_ERROR_CHECK(ret);
+
+        offset += tx_len;
+    } while (offset < len);
+}
+
 cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     colorpicker_save_t save;
@@ -606,6 +642,35 @@ cli_result_t cpicker_cli_add_rgb_color(char const ** tokens, int tokens_amount, 
     
 }
 
+cli_result_t cpicker_cli_list_colors(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
+{
+    int i;
+    char strbuf[cli_max_outbuf_len];
+
+    *msglen = 0;
+
+    if (tokens_amount != 1)
+        return cli_error;
+
+    cli_puts(NULL, "Index\tHue\tSat\tVal\tName\r\n");
+
+    for (i = 0; i < cli_colors_list.length; i++)
+    {
+        snprintf(strbuf,
+                 cli_max_outbuf_len,
+                 "%d\t%d\t%d\t%d\t%s\r\n",
+                 i,
+                 cli_colors_list.items[i].color.h,
+                 cli_colors_list.items[i].color.s,
+                 cli_colors_list.items[i].color.v,
+                 cli_colors_list.items[i].name);
+
+        cli_puts(NULL, strbuf);
+    }
+
+    return cli_success;
+}
+
 static const cli_command_t cpicker_commands[] =
 {
     {
@@ -625,44 +690,14 @@ static const cli_command_t cpicker_commands[] =
         .usage = "<R> [0..100] <G> [0..100] <B> [0..100] <color_name> [A..Za..z]\r\n",
         .description = "Save specified color (RGB color model) to volatile memory\r\n",
         .worker = cpicker_cli_add_rgb_color
+    },
+    {
+        .name = "list_colors",
+        .usage = "\r\n",
+        .description = "List all saved colors\r\n",
+        .worker = cpicker_cli_list_colors
     }
 };
-
-void cli_puts(cli_t *cli, const char *s)
-{
-    uint32_t len = strlen(s);
-
-    if (!gs_port_opened)
-    {
-        return;
-    }
-
-    size_t offset = 0;
-    do
-    {
-        size_t tx_len = len - offset;
-
-        while (!gs_tx_done)
-        {
-            while (app_usbd_event_queue_process())
-            {
-            }
-        }
-
-        if (tx_len > NRFX_USBD_EPSIZE)
-        {
-            tx_len = NRFX_USBD_EPSIZE;
-        }
-
-        gs_tx_done = false;
-        ret_code_t ret = app_usbd_cdc_acm_write(&usb_cdc_acm,
-                                                s + offset,
-                                                tx_len);
-        APP_ERROR_CHECK(ret);
-
-        offset += tx_len;
-    } while (offset < len);
-}
 
 int main(void)
 {
@@ -717,7 +752,7 @@ int main(void)
 
     color_list_init((color_list_t *) &cli_colors_list);
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 3);
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 4);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);
