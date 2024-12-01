@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include "nrf_drv_clock.h"
 #include "app_timer.h"
@@ -28,6 +29,7 @@
 #include "lib/colorpicker.h"
 #include "lib/flash_storage.h"
 #include "lib/cli.h"
+#include "lib/color_list.h"
 
 APP_TIMER_DEF(dispmode_timer);
 APP_TIMER_DEF(debounce_timer);
@@ -458,6 +460,8 @@ static void usb_ev_handler(app_usbd_class_inst_t const * p_inst,
     }
 }
 
+volatile color_list_t cli_colors_list;
+
 cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     colorpicker_save_t save;
@@ -486,9 +490,7 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
     if ((colors[2] < 0) || (colors[1] > max_brightness))
         return cli_error;
 
-    save.color = (hsv_t) {colors[0],
-                          colors[1],
-                          colors[2]};
+    save.color = hsv(colors[0], colors[1], colors[2]);
     save.sat_increment = 1;
     save.val_increment = 1;
 
@@ -497,10 +499,10 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
 
     *msglen = snprintf(msg,
                        cli_max_outbuf_len,
-                       "Color set to H=%d, S=%d, V=%d\r\n",
-                       save.color.h,
-                       save.color.s,
-                       save.color.v);
+                       "Color set to H=%ld, S=%ld, V=%ld\r\n",
+                       colors[0],
+                       colors[1],
+                       colors[2]);
 
     return cli_success;
 }
@@ -545,6 +547,65 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
     return cli_success;
 }
 
+cli_result_t cpicker_cli_add_rgb_color(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
+{
+    int i;
+    long colors[3];
+    color_list_item_t color;
+
+    *msglen = 0;
+
+    if (tokens_amount != 5)
+        return cli_error;
+
+    for (i = 1; i < 4; i++)
+    {
+        char *end;
+        colors[i-1] = strtol(tokens[i], &end, 10);
+
+        if  ((*end != ' ') && (*end != '\0'))
+            return cli_error;
+
+        if ((colors[i-1] > max_pct) || (colors[i-1] < 0))
+            return cli_error;
+    }
+
+    i = 0;
+    while (0 != isalpha((int) (tokens[4][i])))
+    {
+        i++;
+    }
+
+    if ((i == 0) ||
+        (i >= color_list_max_name_length) ||
+        ((tokens[4][i] != ' ') && (tokens[4][i] != '\0'))
+       )
+        return cli_error;
+
+    color.color = rgb2hsv(rgb(colors[0], colors[1], colors[2]));
+    strncpy(color.name, tokens[4], i);
+    color.name[i] = '\0';
+    
+    if (color_list_error == color_list_push((color_list_t *) &cli_colors_list, &color))
+    {
+        *msglen = snprintf(msg,
+                           cli_max_outbuf_len,
+                           "Unable to store, memory is full!\r\n");
+        return cli_success;
+    }
+
+    *msglen = snprintf(msg,
+                       cli_max_outbuf_len,
+                       "Color (R=%ld, G=%ld, B=%ld) with name \"%s\" is stored in the volatile memory\r\n",
+                       colors[0],
+                       colors[1],
+                       colors[2],
+                       color.name);
+
+    return cli_success;
+    
+}
+
 static const cli_command_t cpicker_commands[] =
 {
     {
@@ -558,6 +619,12 @@ static const cli_command_t cpicker_commands[] =
         .usage = "<R> [0..100] <G> [0..100] <B> [0..100]\r\n",
         .description = "Set current color to specified one (RGB color model)\r\n",
         .worker = cpicker_cli_set_rgb
+    },
+    {
+        .name = "add_rgb_color",
+        .usage = "<R> [0..100] <G> [0..100] <B> [0..100] <color_name> [A..Za..z]\r\n",
+        .description = "Save specified color (RGB color model) to volatile memory\r\n",
+        .worker = cpicker_cli_add_rgb_color
     }
 };
 
@@ -648,7 +715,9 @@ int main(void)
                           NRF_GPIO_PIN_PULLUP,
                           gpiote_handler);
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 2);
+    color_list_init((color_list_t *) &cli_colors_list);
+
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 3);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);

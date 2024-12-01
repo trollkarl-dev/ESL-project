@@ -7,13 +7,13 @@ extern "C" {
 
 #include <stdint.h>
 
-#define CLI_PROMPT "\e[32mcli@colorpicker$\e[0m "
+#define CLI_PROMPT "\e[32mcli@colorpicker\e[0m$ "
 #define CLI_HELP_CMD_NAME "help"
 #define CLI_HELP_CMD_DESCRIPTION "Print this message\r\n"
 
 enum { cli_max_inbuf_len = 256 };
 enum { cli_max_outbuf_len = 256 };
-enum { cli_max_tokens = 4 };
+enum { cli_max_tokens = 5 };
 
 typedef enum {
     cli_success,
