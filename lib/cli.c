@@ -1,7 +1,9 @@
 #include "cli.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 static int split(char const *input_str,
                  int char_count_limit,
@@ -121,4 +123,32 @@ void cli_process(cli_t *cli)
 {
     cli_process_internal(cli);
     cli_puts(cli, CLI_PROMPT);
+}
+
+bool cli_read_long(const char *src, long *dst)
+{
+    char *end;
+
+    *dst = strtol(src, &end, 10);
+
+    return (*end == ' ') || (*end == '\0');
+}
+
+
+bool cli_read_long_in_range(const char *src, long *dst, long min, long max)
+{
+    return cli_read_long(src, dst) && (*dst >= min) && (*dst <= max);
+}
+
+bool cli_is_alpha_string(const char *src, uint32_t symbols_limit, uint32_t *length)
+{
+   *length = 0;
+    while (0 != isalpha((int) (src[*length])))
+    {
+        (*length)++;
+    }
+
+    return (*length != 0) &&
+           (*length < symbols_limit) &&
+           ((src[*length] == ' ') || (src[*length] == '\0'));
 }

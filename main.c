@@ -1,7 +1,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <ctype.h>
 
 #include "nrf_drv_clock.h"
 #include "app_timer.h"
@@ -501,7 +500,6 @@ void cli_puts(cli_t *cli, const char *s)
 cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     colorpicker_save_t save;
-    int i;
     long colors[3];
 
     *msglen = 0;
@@ -509,23 +507,13 @@ cli_result_t cpicker_cli_set_hsv(char const ** tokens, int tokens_amount, char *
     if (tokens_amount != 4)
         return cli_error;
 
-    for (i = 1; i < tokens_amount; i++)
-    {
-        char *end;
-        colors[i-1] = strtol(tokens[i], &end, 10);
-
-        if  ((*end != ' ') && (*end != '\0'))
-            return cli_error;
-
-    }
-
-    if ((colors[0] < 0) || (colors[1] > max_hue))
+    if (!cli_read_long_in_range(tokens[1], &(colors[0]), 0, max_hue))
         return cli_error;
-    if ((colors[1] < 0) || (colors[1] > max_saturation))
+    if (!cli_read_long_in_range(tokens[2], &(colors[1]), 0, max_saturation))
         return cli_error;
-    if ((colors[2] < 0) || (colors[1] > max_brightness))
+    if (!cli_read_long_in_range(tokens[3], &(colors[2]), 0, max_brightness))
         return cli_error;
-
+    
     save.color = hsv(colors[0], colors[1], colors[2]);
     save.sat_increment = 1;
     save.val_increment = 1;
@@ -556,13 +544,7 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
 
     for (i = 1; i < tokens_amount; i++)
     {
-        char *end;
-        colors[i-1] = strtol(tokens[i], &end, 10);
-
-        if  ((*end != ' ') && (*end != '\0'))
-            return cli_error;
-
-        if ((colors[i-1] > max_pct) || (colors[i-1] < 0))
+        if (!cli_read_long_in_range(tokens[i], &(colors[i-1]), 0, max_pct))
             return cli_error;
     }
 
@@ -585,6 +567,7 @@ cli_result_t cpicker_cli_set_rgb(char const ** tokens, int tokens_amount, char *
 
 cli_result_t cpicker_cli_add_rgb_color(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
+    uint32_t name_length;
     int i;
     long colors[3];
     color_list_item_t color;
@@ -596,31 +579,27 @@ cli_result_t cpicker_cli_add_rgb_color(char const ** tokens, int tokens_amount, 
 
     for (i = 1; i < 4; i++)
     {
-        char *end;
-        colors[i-1] = strtol(tokens[i], &end, 10);
-
-        if  ((*end != ' ') && (*end != '\0'))
-            return cli_error;
-
-        if ((colors[i-1] > max_pct) || (colors[i-1] < 0))
+        if (!cli_read_long_in_range(tokens[i], &(colors[i-1]), 0, max_pct))
             return cli_error;
     }
 
-    i = 0;
-    while (0 != isalpha((int) (tokens[4][i])))
-    {
-        i++;
-    }
-
-    if ((i == 0) ||
-        (i >= color_list_max_name_length) ||
-        ((tokens[4][i] != ' ') && (tokens[4][i] != '\0'))
-       )
+    if (!cli_is_alpha_string(tokens[4], color_list_max_name_length, &name_length))
         return cli_error;
 
     color.color = rgb2hsv(rgb(colors[0], colors[1], colors[2]));
-    strncpy(color.name, tokens[4], i);
-    color.name[i] = '\0';
+    strncpy(color.name, tokens[4], name_length);
+    color.name[name_length] = '\0';
+
+    for (i = 0; i < cli_colors_list.length; i++)
+    {
+        if (0 == strcmp(color.name, (char *) cli_colors_list.items[i].name))
+        {
+            *msglen = snprintf(msg,
+                               cli_max_outbuf_len,
+                               "The specified color already exist!\r\n");
+            return cli_success;
+        }
+    }
     
     if (color_list_error == color_list_push((color_list_t *) &cli_colors_list, &color))
     {
@@ -639,7 +618,62 @@ cli_result_t cpicker_cli_add_rgb_color(char const ** tokens, int tokens_amount, 
                        color.name);
 
     return cli_success;
+}
+
+cli_result_t cpicker_cli_add_hsv_color(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
+{
+    uint32_t name_length;
+    int i;
+    long colors[3];
+    color_list_item_t color;
+
+    *msglen = 0;
+
+    if (tokens_amount != 5)
+        return cli_error;
+
+    if (!cli_read_long_in_range(tokens[1], &(colors[0]), 0, max_hue))
+        return cli_error;
+    if (!cli_read_long_in_range(tokens[2], &(colors[1]), 0, max_saturation))
+        return cli_error;
+    if (!cli_read_long_in_range(tokens[3], &(colors[2]), 0, max_brightness))
+        return cli_error;
+
+    if (!cli_is_alpha_string(tokens[4], color_list_max_name_length, &name_length))
+        return cli_error;
+
+    color.color = hsv(colors[0], colors[1], colors[2]);
+    strncpy(color.name, tokens[4], name_length);
+    color.name[name_length] = '\0';
+
+    for (i = 0; i < cli_colors_list.length; i++)
+    {
+        if (0 == strcmp(color.name, (char *) cli_colors_list.items[i].name))
+        {
+            *msglen = snprintf(msg,
+                               cli_max_outbuf_len,
+                               "The specified color already exist!\r\n");
+            return cli_success;
+        }
+    }
     
+    if (color_list_error == color_list_push((color_list_t *) &cli_colors_list, &color))
+    {
+        *msglen = snprintf(msg,
+                           cli_max_outbuf_len,
+                           "Unable to store, memory is full!\r\n");
+        return cli_success;
+    }
+
+    *msglen = snprintf(msg,
+                       cli_max_outbuf_len,
+                       "Color (H=%ld, S=%ld, V=%ld) with name \"%s\" is stored in the volatile memory\r\n",
+                       colors[0],
+                       colors[1],
+                       colors[2],
+                       color.name);
+
+    return cli_success;
 }
 
 cli_result_t cpicker_cli_list_colors(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
@@ -690,6 +724,12 @@ static const cli_command_t cpicker_commands[] =
         .usage = "<R> [0..100] <G> [0..100] <B> [0..100] <color_name> [A..Za..z]\r\n",
         .description = "Save specified color (RGB color model) to volatile memory\r\n",
         .worker = cpicker_cli_add_rgb_color
+    },
+    {
+        .name = "add_hsv_color",
+        .usage = "<H> [0..360] <S> [0..100] <V> [0..100] <color_name> [A..Za..z]\r\n",
+        .description = "Save specified color (HSV color model) to volatile memory\r\n",
+        .worker = cpicker_cli_add_hsv_color
     },
     {
         .name = "list_colors",
@@ -752,7 +792,7 @@ int main(void)
 
     color_list_init((color_list_t *) &cli_colors_list);
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 4);
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 5);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);

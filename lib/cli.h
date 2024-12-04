@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define CLI_PROMPT "\e[32mcli@colorpicker\e[0m$ "
 #define CLI_HELP_CMD_NAME "help"
@@ -45,6 +46,10 @@ extern void cli_puts(cli_t *cli, const char *s);
 void cli_init(cli_t *cli, cli_command_t const *cmds, uint32_t cmds_amount);
 void cli_push_char(cli_t *cli, char c);
 void cli_process(cli_t *cli);
+
+bool cli_read_long(const char *src, long *dst);
+bool cli_read_long_in_range(const char *src, long *dst, long min, long max);
+bool cli_is_alpha_string(const char *src, uint32_t symbols_limit, uint32_t *length);
 
 #ifdef __cplusplus
 }
