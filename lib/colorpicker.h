@@ -50,6 +50,7 @@ void colorpicker_next_state(colorpicker_t *c);
 colorpicker_state_t colorpicker_get_state(colorpicker_t *c);
 
 hsv_t colorpicker_get_color(colorpicker_t *c);
+void colorpicker_set_color(colorpicker_t *c, const hsv_t *color);
 void colorpicker_next_color(colorpicker_t *c);
 
 void colorpicker_update_dispmode_data(colorpicker_t *c,

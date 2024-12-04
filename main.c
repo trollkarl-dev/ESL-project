@@ -590,17 +590,14 @@ cli_result_t cpicker_cli_add_rgb_color(char const ** tokens, int tokens_amount, 
     strncpy(color.name, tokens[4], name_length);
     color.name[name_length] = '\0';
 
-    for (i = 0; i < cli_colors_list.length; i++)
+    if (NULL != color_list_find_by_name((color_list_t *) &cli_colors_list, color.name))
     {
-        if (0 == strcmp(color.name, (char *) cli_colors_list.items[i].name))
-        {
-            *msglen = snprintf(msg,
-                               cli_max_outbuf_len,
-                               "The specified color already exist!\r\n");
-            return cli_success;
-        }
+        *msglen = snprintf(msg,
+                           cli_max_outbuf_len,
+                           "The specified color already exist!\r\n");
+        return cli_success;
     }
-    
+
     if (color_list_error == color_list_push((color_list_t *) &cli_colors_list, &color))
     {
         *msglen = snprintf(msg,
@@ -623,7 +620,6 @@ cli_result_t cpicker_cli_add_rgb_color(char const ** tokens, int tokens_amount, 
 cli_result_t cpicker_cli_add_hsv_color(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     uint32_t name_length;
-    int i;
     long colors[3];
     color_list_item_t color;
 
@@ -646,17 +642,14 @@ cli_result_t cpicker_cli_add_hsv_color(char const ** tokens, int tokens_amount, 
     strncpy(color.name, tokens[4], name_length);
     color.name[name_length] = '\0';
 
-    for (i = 0; i < cli_colors_list.length; i++)
+    if (NULL != color_list_find_by_name((color_list_t *) &cli_colors_list, color.name))
     {
-        if (0 == strcmp(color.name, (char *) cli_colors_list.items[i].name))
-        {
-            *msglen = snprintf(msg,
-                               cli_max_outbuf_len,
-                               "The specified color already exist!\r\n");
-            return cli_success;
-        }
+        *msglen = snprintf(msg,
+                           cli_max_outbuf_len,
+                           "The specified color already exist!\r\n");
+        return cli_success;
     }
-    
+
     if (color_list_error == color_list_push((color_list_t *) &cli_colors_list, &color))
     {
         *msglen = snprintf(msg,
@@ -679,7 +672,6 @@ cli_result_t cpicker_cli_add_hsv_color(char const ** tokens, int tokens_amount, 
 cli_result_t cpicker_cli_add_current_color(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     uint32_t name_length;
-    int i;
     color_list_item_t color;
 
     if (tokens_amount != 2)
@@ -692,15 +684,12 @@ cli_result_t cpicker_cli_add_current_color(char const ** tokens, int tokens_amou
     strncpy(color.name, tokens[1], name_length);
     color.name[name_length] = '\0';
 
-    for (i = 0; i < cli_colors_list.length; i++)
+    if (NULL != color_list_find_by_name((color_list_t *) &cli_colors_list, color.name))
     {
-        if (0 == strcmp(color.name, (char *) cli_colors_list.items[i].name))
-        {
-            *msglen = snprintf(msg,
-                               cli_max_outbuf_len,
-                               "The specified color already exist!\r\n");
-            return cli_success;
-        }
+        *msglen = snprintf(msg,
+                           cli_max_outbuf_len,
+                           "The specified color already exist!\r\n");
+        return cli_success;
     }
     
     if (color_list_error == color_list_push((color_list_t *) &cli_colors_list, &color))
@@ -722,6 +711,44 @@ cli_result_t cpicker_cli_add_current_color(char const ** tokens, int tokens_amou
     return cli_success;
 }
 
+cli_result_t cpicker_cli_apply_color(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
+{
+    uint32_t name_length;
+    char color_name[color_list_max_name_length];
+    color_list_item_t *color_ptr;
+
+    if (tokens_amount != 2)
+        return cli_error;
+
+    if (!cli_is_alpha_string(tokens[1], color_list_max_name_length, &name_length))
+        return cli_error;
+
+    strncpy(color_name, tokens[1], name_length);
+    color_name[name_length] = '\0';
+
+    color_ptr = color_list_find_by_name((color_list_t *) &cli_colors_list, color_name);
+
+    if (NULL == color_ptr)
+    {
+        *msglen = snprintf(msg,
+                           cli_max_outbuf_len,
+                           "Failed to find a color with the specified name!\r\n");
+        return cli_success;
+    }
+    
+    colorpicker_set_color((colorpicker_t *) &cpicker, &(color_ptr->color));
+    colorpicker_show_color((colorpicker_t *) &cpicker);
+
+    *msglen = snprintf(msg,
+                       cli_max_outbuf_len,
+                       "The color named \"%s\" (H=%d, S=%d, V=%d) is stored in the volatile memory\r\n",
+                       color_ptr->name,
+                       color_ptr->color.h,
+                       color_ptr->color.s,
+                       color_ptr->color.v);
+
+    return cli_success;
+}
 cli_result_t cpicker_cli_list_colors(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     int i;
@@ -784,6 +811,12 @@ static const cli_command_t cpicker_commands[] =
         .worker = cpicker_cli_add_current_color
     },
     {
+        .name = "apply_color",
+        .usage = "<color_name> [A..Za..z]+\r\n",
+        .description = "Sets the color previously stored in volatile memory\r\n",
+        .worker = cpicker_cli_apply_color
+    },
+    {
         .name = "list_colors",
         .usage = "\r\n",
         .description = "List all saved colors\r\n",
@@ -844,7 +877,7 @@ int main(void)
 
     color_list_init((color_list_t *) &cli_colors_list);
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 6);
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 7);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);

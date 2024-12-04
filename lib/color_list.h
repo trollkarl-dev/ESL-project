@@ -7,7 +7,7 @@ extern "C" {
 
 #include "colorspaces.h"
 
-enum { color_list_max_length = 10 };
+enum { color_list_max_length = 2 };
 enum { color_list_max_name_length = 16 };
 
 typedef enum {
@@ -27,6 +27,7 @@ typedef struct {
 
 void color_list_init(color_list_t *list);
 color_list_result_t color_list_push(color_list_t *list, const color_list_item_t *item);
+color_list_item_t* color_list_find_by_name(color_list_t *list, const char *name);
 
 #ifdef __cplusplus
 }

@@ -34,6 +34,11 @@ hsv_t colorpicker_get_color(colorpicker_t *c)
     return c->color;
 }
 
+void colorpicker_set_color(colorpicker_t *c, const hsv_t *color)
+{
+    c->color = *color;
+}
+
 void colorpicker_next_color(colorpicker_t *c)
 {
     switch (c->state)
