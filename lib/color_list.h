@@ -8,7 +8,7 @@ extern "C" {
 #include "colorspaces.h"
 #include <stdbool.h>
 
-enum { color_list_max_length = 2 };
+enum { color_list_max_length = 10 };
 enum { color_list_max_name_length = 16 };
 
 typedef enum {
