@@ -855,31 +855,31 @@ static const cli_command_t cpicker_commands[] =
     {
         .name = "add_rgb_color",
         .usage = "<R> [0..100] <G> [0..100] <B> [0..100] <color_name> [A..Za..z]+\r\n",
-        .description = "Save specified color (RGB color model) to volatile memory\r\n",
+        .description = "Save specified color (RGB color model) to memory\r\n",
         .worker = cpicker_cli_add_rgb_color
     },
     {
         .name = "add_hsv_color",
         .usage = "<H> [0..360] <S> [0..100] <V> [0..100] <color_name> [A..Za..z]+\r\n",
-        .description = "Save specified color (HSV color model) to volatile memory\r\n",
+        .description = "Save specified color (HSV color model) to memory\r\n",
         .worker = cpicker_cli_add_hsv_color
     },
     {
         .name = "add_current_color",
         .usage = "<color_name> [A..Za..z]+\r\n",
-        .description = "Save current color to volatile memory\r\n",
+        .description = "Save current color to memory\r\n",
         .worker = cpicker_cli_add_current_color
     },
     {
         .name = "apply_color",
         .usage = "<color_name> [A..Za..z]+\r\n",
-        .description = "Sets the color previously stored in volatile memory\r\n",
+        .description = "Set the color previously stored in memory\r\n",
         .worker = cpicker_cli_apply_color
     },
     {
         .name = "del_color",
         .usage = "<color_name> [A..Za..z]+\r\n",
-        .description = "Delete the color previously stored in volatile memory\r\n",
+        .description = "Delete the color previously stored in memory\r\n",
         .worker = cpicker_cli_delete_color
     },
     {
