@@ -749,6 +749,45 @@ cli_result_t cpicker_cli_apply_color(char const ** tokens, int tokens_amount, ch
 
     return cli_success;
 }
+
+cli_result_t cpicker_cli_delete_color(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
+{
+    uint32_t name_length;
+    char color_name[color_list_max_name_length];
+    color_list_item_t *color_ptr;
+
+    if (tokens_amount != 2)
+        return cli_error;
+
+    if (!cli_is_alpha_string(tokens[1], color_list_max_name_length, &name_length))
+        return cli_error;
+
+    strncpy(color_name, tokens[1], name_length);
+    color_name[name_length] = '\0';
+
+    color_ptr = color_list_find_by_name((color_list_t *) &cli_colors_list, color_name);
+
+    if (NULL == color_ptr)
+    {
+        *msglen = snprintf(msg,
+                           cli_max_outbuf_len,
+                           "Failed to find a color with the specified name!\r\n");
+        return cli_success;
+    }
+    
+    color_list_delete((color_list_t *) &cli_colors_list, color_ptr->name);
+
+    *msglen = snprintf(msg,
+                       cli_max_outbuf_len,
+                       "The color named \"%s\" (H=%d, S=%d, V=%d) is removed from the volatile memory\r\n",
+                       color_ptr->name,
+                       color_ptr->color.h,
+                       color_ptr->color.s,
+                       color_ptr->color.v);
+
+    return cli_success;
+}
+
 cli_result_t cpicker_cli_list_colors(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     int i;
@@ -759,20 +798,22 @@ cli_result_t cpicker_cli_list_colors(char const ** tokens, int tokens_amount, ch
     if (tokens_amount != 1)
         return cli_error;
 
-    cli_puts(NULL, "Index\tHue\tSat\tVal\tName\r\n");
+    cli_puts(NULL, "Name\tHue\tSat\tVal\r\n");
 
-    for (i = 0; i < cli_colors_list.length; i++)
+    for (i = 0; i < color_list_max_length; i++)
     {
-        snprintf(strbuf,
-                 cli_max_outbuf_len,
-                 "%d\t%d\t%d\t%d\t%s\r\n",
-                 i,
-                 cli_colors_list.items[i].color.h,
-                 cli_colors_list.items[i].color.s,
-                 cli_colors_list.items[i].color.v,
-                 cli_colors_list.items[i].name);
+        if (cli_colors_list.used[i])
+        {
+            snprintf(strbuf,
+                     cli_max_outbuf_len,
+                     "%s\t%d\t%d\t%d\r\n",
+                     cli_colors_list.items[i].name,
+                     cli_colors_list.items[i].color.h,
+                     cli_colors_list.items[i].color.s,
+                     cli_colors_list.items[i].color.v);
 
-        cli_puts(NULL, strbuf);
+            cli_puts(NULL, strbuf);
+        }
     }
 
     return cli_success;
@@ -815,6 +856,12 @@ static const cli_command_t cpicker_commands[] =
         .usage = "<color_name> [A..Za..z]+\r\n",
         .description = "Sets the color previously stored in volatile memory\r\n",
         .worker = cpicker_cli_apply_color
+    },
+    {
+        .name = "del_color",
+        .usage = "<color_name> [A..Za..z]+\r\n",
+        .description = "Delete the color previously stored in volatile memory\r\n",
+        .worker = cpicker_cli_delete_color
     },
     {
         .name = "list_colors",
@@ -877,7 +924,7 @@ int main(void)
 
     color_list_init((color_list_t *) &cli_colors_list);
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 7);
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 8);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);

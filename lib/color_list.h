@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include "colorspaces.h"
+#include <stdbool.h>
 
 enum { color_list_max_length = 2 };
 enum { color_list_max_name_length = 16 };
@@ -23,10 +24,12 @@ typedef struct {
 typedef struct {
     uint16_t length;
     color_list_item_t items[color_list_max_length];
+    bool used[color_list_max_length];
 } color_list_t;
 
 void color_list_init(color_list_t *list);
 color_list_result_t color_list_push(color_list_t *list, const color_list_item_t *item);
+color_list_result_t color_list_delete(color_list_t *list, const char *name);
 color_list_item_t* color_list_find_by_name(color_list_t *list, const char *name);
 
 #ifdef __cplusplus
