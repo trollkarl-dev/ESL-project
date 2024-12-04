@@ -341,12 +341,19 @@ static colorpicker_save_t default_save = {
 };
 
 static volatile flash_storage_t cpicker_storage;
+static volatile flash_storage_t cli_colors_list_storage;
+
 enum { cpicker_storage_size_items = 64 };
+enum { cli_colors_list_storage_size_items = 10 };
 
 void *cpicker_storage_top =
 (void *) (BOOTLOADER_START_ADDR - NRF_DFU_APP_DATA_AREA_SIZE);
 
+void *cli_colors_list_storage_top =
+(void *) (BOOTLOADER_START_ADDR - NRF_DFU_APP_DATA_AREA_SIZE + 1024);
+
 static void save_state(void)
+
 {
     bool res;
 
@@ -605,14 +612,17 @@ cli_result_t cpicker_cli_add_rgb_color(char const ** tokens, int tokens_amount, 
                            "Unable to store, memory is full!\r\n");
         return cli_success;
     }
+   
+    bool flag = flash_storage_write((flash_storage_t *) &cli_colors_list_storage, (void *) &cli_colors_list);
 
     *msglen = snprintf(msg,
                        cli_max_outbuf_len,
-                       "Color (R=%ld, G=%ld, B=%ld) with name \"%s\" is stored in the volatile memory\r\n",
+                       "Color (R=%ld, G=%ld, B=%ld) with name \"%s\" is stored in the memory (%s)\r\n",
                        colors[0],
                        colors[1],
                        colors[2],
-                       color.name);
+                       color.name,
+                       flag ? "success" : "error");
 
     return cli_success;
 }
@@ -658,13 +668,16 @@ cli_result_t cpicker_cli_add_hsv_color(char const ** tokens, int tokens_amount, 
         return cli_success;
     }
 
+    bool flag = flash_storage_write((flash_storage_t *) &cli_colors_list_storage, (void *) &cli_colors_list);
+
     *msglen = snprintf(msg,
                        cli_max_outbuf_len,
-                       "Color (H=%ld, S=%ld, V=%ld) with name \"%s\" is stored in the volatile memory\r\n",
+                       "Color (H=%ld, S=%ld, V=%ld) with name \"%s\" is stored in the memory (%s)\r\n",
                        colors[0],
                        colors[1],
                        colors[2],
-                       color.name);
+                       color.name,
+                       flag ? "success" : "error");
 
     return cli_success;
 }
@@ -700,13 +713,16 @@ cli_result_t cpicker_cli_add_current_color(char const ** tokens, int tokens_amou
         return cli_success;
     }
 
+    bool flag = flash_storage_write((flash_storage_t *) &cli_colors_list_storage, (void *) &cli_colors_list);
+
     *msglen = snprintf(msg,
                        cli_max_outbuf_len,
-                       "Current color (H=%d, S=%d, V=%d) with name \"%s\" is stored in the volatile memory\r\n",
+                       "Current color (H=%d, S=%d, V=%d) with name \"%s\" is stored in the memory (%s)\r\n",
                        color.color.h,
                        color.color.s,
                        color.color.v,
-                       color.name);
+                       color.name,
+                       flag ? "success" : "error");
 
     return cli_success;
 }
@@ -777,13 +793,16 @@ cli_result_t cpicker_cli_delete_color(char const ** tokens, int tokens_amount, c
     
     color_list_delete((color_list_t *) &cli_colors_list, color_ptr->name);
 
+    bool flag = flash_storage_write((flash_storage_t *) &cli_colors_list_storage, (void *) &cli_colors_list);
+
     *msglen = snprintf(msg,
                        cli_max_outbuf_len,
-                       "The color named \"%s\" (H=%d, S=%d, V=%d) is removed from the volatile memory\r\n",
+                       "The color named \"%s\" (H=%d, S=%d, V=%d) is removed from the memory (%s)\r\n",
                        color_ptr->name,
                        color_ptr->color.h,
                        color_ptr->color.s,
-                       color_ptr->color.v);
+                       color_ptr->color.v,
+                       flag ? "success" : "error");
 
     return cli_success;
 }
@@ -874,6 +893,7 @@ static const cli_command_t cpicker_commands[] =
 int main(void)
 {
     void *cpicker_saved_state;
+    void *cli_colors_list_saved_state;
 
     static uint8_t channels[NRF_PWM_CHANNEL_COUNT] = {
         my_led_mappings[pwm_channel_indicator],
@@ -913,6 +933,19 @@ int main(void)
 
     colorpicker_show_color((colorpicker_t *) &cpicker);
 
+    flash_storage_init((flash_storage_t *) &cli_colors_list_storage,
+                       sizeof(color_list_t),
+                       cli_colors_list_storage_size_items,
+                       cli_colors_list_storage_top);
+
+    cli_colors_list_saved_state =
+    flash_storage_read_last((flash_storage_t *) &cli_colors_list_storage);
+
+    if (cli_colors_list_saved_state == NULL)
+        color_list_init((color_list_t *) &cli_colors_list);
+    else
+        memcpy((void *) &cli_colors_list, (const void *) cli_colors_list_saved_state, sizeof(color_list_t));
+
     button_init((button_t *) &button,
                 &button_timings,
                 &button_callbacks);
@@ -921,8 +954,6 @@ int main(void)
     gpiote_init_on_toggle(my_btn_mappings[brd_btn_idx],
                           NRF_GPIO_PIN_PULLUP,
                           gpiote_handler);
-
-    color_list_init((color_list_t *) &cli_colors_list);
 
     cli_init((cli_t *) &cpicker_cli, cpicker_commands, 8);
 
