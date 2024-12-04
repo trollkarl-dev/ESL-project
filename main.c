@@ -676,6 +676,52 @@ cli_result_t cpicker_cli_add_hsv_color(char const ** tokens, int tokens_amount, 
     return cli_success;
 }
 
+cli_result_t cpicker_cli_add_current_color(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
+{
+    uint32_t name_length;
+    int i;
+    color_list_item_t color;
+
+    if (tokens_amount != 2)
+        return cli_error;
+
+    if (!cli_is_alpha_string(tokens[1], color_list_max_name_length, &name_length))
+        return cli_error;
+
+    color.color = colorpicker_get_color((colorpicker_t *) &cpicker);
+    strncpy(color.name, tokens[1], name_length);
+    color.name[name_length] = '\0';
+
+    for (i = 0; i < cli_colors_list.length; i++)
+    {
+        if (0 == strcmp(color.name, (char *) cli_colors_list.items[i].name))
+        {
+            *msglen = snprintf(msg,
+                               cli_max_outbuf_len,
+                               "The specified color already exist!\r\n");
+            return cli_success;
+        }
+    }
+    
+    if (color_list_error == color_list_push((color_list_t *) &cli_colors_list, &color))
+    {
+        *msglen = snprintf(msg,
+                           cli_max_outbuf_len,
+                           "Unable to store, memory is full!\r\n");
+        return cli_success;
+    }
+
+    *msglen = snprintf(msg,
+                       cli_max_outbuf_len,
+                       "Current color (H=%d, S=%d, V=%d) with name \"%s\" is stored in the volatile memory\r\n",
+                       color.color.h,
+                       color.color.s,
+                       color.color.v,
+                       color.name);
+
+    return cli_success;
+}
+
 cli_result_t cpicker_cli_list_colors(char const ** tokens, int tokens_amount, char *msg, uint32_t *msglen)
 {
     int i;
@@ -721,15 +767,21 @@ static const cli_command_t cpicker_commands[] =
     },
     {
         .name = "add_rgb_color",
-        .usage = "<R> [0..100] <G> [0..100] <B> [0..100] <color_name> [A..Za..z]\r\n",
+        .usage = "<R> [0..100] <G> [0..100] <B> [0..100] <color_name> [A..Za..z]+\r\n",
         .description = "Save specified color (RGB color model) to volatile memory\r\n",
         .worker = cpicker_cli_add_rgb_color
     },
     {
         .name = "add_hsv_color",
-        .usage = "<H> [0..360] <S> [0..100] <V> [0..100] <color_name> [A..Za..z]\r\n",
+        .usage = "<H> [0..360] <S> [0..100] <V> [0..100] <color_name> [A..Za..z]+\r\n",
         .description = "Save specified color (HSV color model) to volatile memory\r\n",
         .worker = cpicker_cli_add_hsv_color
+    },
+    {
+        .name = "add_current_color",
+        .usage = "<color_name> [A..Za..z]+\r\n",
+        .description = "Save current color to volatile memory\r\n",
+        .worker = cpicker_cli_add_current_color
     },
     {
         .name = "list_colors",
@@ -792,7 +844,7 @@ int main(void)
 
     color_list_init((color_list_t *) &cli_colors_list);
 
-    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 5);
+    cli_init((cli_t *) &cpicker_cli, cpicker_commands, 6);
 
     app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&usb_cdc_acm);
     ret_code_t ret = app_usbd_class_append(class_cdc_acm);
