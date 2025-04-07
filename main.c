@@ -31,19 +31,12 @@
 #include "lib/color_list.h"
 
 APP_TIMER_DEF(dispmode_timer);
-APP_TIMER_DEF(debounce_timer);
-APP_TIMER_DEF(btnhold_timer);
-APP_TIMER_DEF(btnclk_timer);
+
+BUTTON_DEF(button);
 
 enum { max_pct = 100 };
 
 enum { brd_btn_idx = 0 };
-enum { btn_dblclk_pause = 200 };
-
-enum { btnhold_period_first_ms = 500 };
-enum { btnhold_period_next_ms = 50 };
-
-enum { debounce_period_ms = 50 };
 
 enum { dispmode_slow_ms = 10 };
 enum { dispmode_fast_ms = 2 };
@@ -67,7 +60,6 @@ static const hsv_t default_color_hsv = {
 };
 
 static volatile colorpicker_t cpicker;
-static volatile button_t button;
 
 static const char *cpicker_modenames[] =
 {
@@ -170,16 +162,6 @@ static void colorpicker_show_color(colorpicker_t *c)
                  rgb.r, rgb.g, rgb.b);
 }
 
-static void btnhold_timer_handler(void *ctx)
-{
-    button_hold_check((button_t *) &button);
-}
-
-static void btnclk_timer_handler(void *ctx)
-{
-    button_click_check((button_t *) &button);
-}
-
 static void dispmode_timer_handler(void *ctx)
 {
     colorpicker_dispmode_data_t data = {0};
@@ -196,11 +178,6 @@ static void dispmode_timer_handler(void *ctx)
         app_timer_start(dispmode_timer,
                         APP_TIMER_TICKS(dispmode_fast_ms),
                         NULL);
-}
-
-static void debounce_timer_handler(void *ctx)
-{
-    button_debounce_check((button_t *) &button);
 }
 
 static void gpiote_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
@@ -230,18 +207,6 @@ static void gpiote_init_on_toggle(nrfx_gpiote_pin_t pin,
 
 static void create_timers(void)
 {
-    app_timer_create(&debounce_timer,
-                     APP_TIMER_MODE_SINGLE_SHOT,
-                     debounce_timer_handler);
-
-    app_timer_create(&btnclk_timer,
-                     APP_TIMER_MODE_SINGLE_SHOT,
-                     btnclk_timer_handler);
-
-    app_timer_create(&btnhold_timer,
-                     APP_TIMER_MODE_SINGLE_SHOT,
-                     btnhold_timer_handler);
-
     app_timer_create(&dispmode_timer,
                      APP_TIMER_MODE_SINGLE_SHOT,
                      dispmode_timer_handler);
@@ -286,20 +251,10 @@ static bool button_is_pressed(void)
     return my_btn_is_pressed(brd_btn_idx);
 }
 
-static void button_schedule_click_check(uint32_t delay_ms)
-{
-    app_timer_start(btnclk_timer, APP_TIMER_TICKS(delay_ms), NULL);
-}
-
-static void button_schedule_hold_check(uint32_t delay_ms)
-{
-    app_timer_start(btnhold_timer, APP_TIMER_TICKS(delay_ms), NULL);
-}
-
-static void button_schedule_debounce_check(uint32_t delay_ms)
-{
-    app_timer_start(debounce_timer, APP_TIMER_TICKS(delay_ms), NULL);
-}
+enum { btn_dblclk_pause = 200 };
+enum { btnhold_period_first_ms = 500 };
+enum { btnhold_period_next_ms = 50 };
+enum { debounce_period_ms = 50 };
 
 static button_timings_t const button_timings = {
     .dblclk_pause_ms = btn_dblclk_pause, 
@@ -311,10 +266,7 @@ static button_timings_t const button_timings = {
 static button_callbacks_t const button_callbacks = {
     .onclick = button_onclick,
     .onhold = button_onhold,
-    .is_pressed = button_is_pressed,
-    .schedule_click_check = button_schedule_click_check,
-    .schedule_hold_check = button_schedule_hold_check,
-    .schedule_debounce_check = button_schedule_debounce_check
+    .is_pressed = button_is_pressed
 };
 
 void flash_storage_page_erase(uint32_t address)
